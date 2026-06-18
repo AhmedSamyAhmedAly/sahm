@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, nullslast, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import Asset, Recommendation, WatchlistItem
@@ -36,6 +37,10 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool)
         expected_hold_days=rec.expected_hold_days,
         reasons=rec.reasons or [],
         watched=watched,
+        news_sentiment=rec.news_sentiment,
+        news_label=rec.news_label,
+        news_thesis=rec.news_thesis,
+        news_catalyst=rec.news_catalyst,
     )
 
 
@@ -79,6 +84,13 @@ def get_picks(
         ).all()
     }
     rows = db.execute(q).all()
+    # Light, honest re-rank: nudge by news sentiment without touching success_prob.
+    w = settings.news_weight
+    rows = sorted(
+        rows,
+        key=lambda r: (r[0].success_prob or 0.0) + w * (r[0].news_sentiment or 0.0),
+        reverse=True,
+    )
     picks = [
         _to_pick(i + 1, rec, asset, rec.ticker in watched)
         for i, (rec, asset) in enumerate(rows)

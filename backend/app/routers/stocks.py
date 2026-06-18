@@ -80,6 +80,7 @@ def stock_detail(
     return StockDetail(
         ticker=ticker, name=asset.name, sector=asset.sector,
         latest=latest_pick, components=components, bars=bar_list, history=history,
+        news=(latest_rec.news if latest_rec else None),
     )
 
 

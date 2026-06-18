@@ -4,6 +4,7 @@ import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import StockDetail from "./pages/StockDetail.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
+import Admin from "./pages/Admin.jsx";
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -19,6 +20,11 @@ function Nav() {
       <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         Track Record
       </NavLink>
+      {user.role === "admin" && (
+        <NavLink to="/admin" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+          Admin
+        </NavLink>
+      )}
       <div className="spacer" />
       <span className="pill">{user.email}</span>
       <button className="ghost" onClick={logout}>
@@ -28,10 +34,11 @@ function Nav() {
   );
 }
 
-function Protected({ children }) {
+function Protected({ children, adminOnly = false }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
   return children;
 }
 
@@ -62,6 +69,14 @@ export default function App() {
           element={
             <Protected>
               <TrackRecord />
+            </Protected>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <Protected adminOnly>
+              <Admin />
             </Protected>
           }
         />

@@ -9,12 +9,13 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, nullslast, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.engine import backtest as bt
 from app.engine import ml
+from app.engine import news as news_mod
 from app.engine.indicators import add_indicators, feature_row, MIN_BARS
 from app.engine.levels import trade_levels
 from app.engine.signals import ml_signal, score_features
@@ -99,8 +100,51 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
         active_count=len(assets), ranked_count=ranked,
     ))
     db.commit()
+
+    news_done = enrich_news(db, scan_date) if settings.news_enabled else 0
     return {"scan_date": str(scan_date), "ranked": ranked, "active": len(assets),
+            "news_enriched": news_done,
             "universe": universe}
+
+
+def enrich_news(db: Session, scan_date: dt.date) -> int:
+    """Fetch + assess news for the shortlist (top buy candidates) and store it.
+
+    Cost guard: only the top `news_shortlist_n` buy/strong_buy picks are enriched —
+    never the whole universe. Failures per ticker are swallowed (news is supplementary).
+    """
+    rows = db.execute(
+        select(Recommendation)
+        .where(Recommendation.date == scan_date,
+               Recommendation.signal.in_(("buy", "strong_buy")))
+        .order_by(nullslast(Recommendation.success_prob.desc()))
+        .limit(settings.news_shortlist_n)
+    ).scalars().all()
+    if not rows:
+        return 0
+
+    names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
+    done = 0
+    for rec in rows:
+        try:
+            res = news_mod.analyze(names.get(rec.ticker), rec.ticker)
+        except Exception:
+            continue
+        sentiment = float(res.get("sentiment") or 0.0)
+        headlines = res.get("headlines") or []
+        rec.news_sentiment = sentiment
+        rec.news_label = res.get("label") or "neutral"
+        rec.news_thesis = (res.get("thesis") or "")[:500]
+        rec.news_catalyst = bool(headlines) and abs(sentiment) >= 0.5
+        rec.news = {
+            "headlines": headlines,
+            "catalysts": res.get("catalysts") or [],
+            "risk_flag": bool(res.get("risk_flag")),
+            "engine": res.get("engine"),
+        }
+        done += 1
+    db.commit()
+    return done
 
 
 def grade_due(db: Session) -> int:

@@ -46,4 +46,13 @@ export const api = {
   trackRecord: () => request("/api/track-record"),
   watch: (ticker, on) =>
     request(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: on ? "POST" : "DELETE" }),
+
+  // ---- admin ----
+  adminStats: () => request("/api/admin/stats"),
+  adminUsers: () => request("/api/admin/users"),
+  adminCreateUser: (email, password, role = "member") =>
+    request("/api/admin/users", { method: "POST", body: { email, password, role } }),
+  adminUpdateUser: (id, patch) =>
+    request(`/api/admin/users/${id}`, { method: "PATCH", body: patch }),
+  adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
 };

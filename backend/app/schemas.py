@@ -18,6 +18,40 @@ class LoginRequest(BaseModel):
     password: str
 
 
+# ---- admin ----
+class AdminUserOut(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+    created_at: dt.datetime | None = None
+    last_login_at: dt.datetime | None = None
+    watchlist_count: int = 0
+
+
+class CreateUserRequest(BaseModel):
+    email: EmailStr
+    password: str
+    role: str = "member"
+
+
+class UpdateUserRequest(BaseModel):
+    role: str | None = None
+    is_active: bool | None = None
+    password: str | None = None
+
+
+class AdminStats(BaseModel):
+    total_users: int
+    active_users: int
+    admins: int
+    logins_last_7d: int
+    recommendations: int
+    last_scan_date: dt.date | None = None
+    universe_size: int
+    active_assets: int
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -44,6 +78,11 @@ class PickOut(BaseModel):
     expected_hold_days: float | None = None
     reasons: list[str] = []
     watched: bool = False
+    # live news overlay (separate from success_prob)
+    news_sentiment: float | None = None
+    news_label: str | None = None
+    news_thesis: str | None = None
+    news_catalyst: bool | None = None
 
 
 class PicksResponse(BaseModel):
@@ -70,6 +109,7 @@ class StockDetail(BaseModel):
     components: dict | None = None
     bars: list[BarOut]
     history: list[dict]   # past recommendations + outcomes for this name
+    news: dict | None = None   # {headlines:[...], catalysts, risk_flag, engine}
 
 
 # ---- track record ----

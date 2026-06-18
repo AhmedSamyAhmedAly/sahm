@@ -12,6 +12,18 @@ function Kpi({ label, value }) {
   );
 }
 
+function NewsChip({ p }) {
+  if (p.news_label == null && p.news_sentiment == null)
+    return <span style={{ color: "var(--muted)" }}>—</span>;
+  const cls = p.news_label === "positive" ? "up" : p.news_label === "negative" ? "down" : "";
+  const dot = p.news_label === "positive" ? "🟢" : p.news_label === "negative" ? "🔴" : "➖";
+  return (
+    <span className={cls} title={p.news_thesis || ""} style={{ whiteSpace: "nowrap" }}>
+      {dot} {p.news_catalyst ? "⚡" : ""}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const nav = useNavigate();
   const [data, setData] = useState(null);
@@ -88,6 +100,7 @@ export default function Dashboard() {
                 <th>#</th>
                 <th>Stock</th>
                 <th>Signal</th>
+                <th>News</th>
                 <th>Score</th>
                 <th>Success %</th>
                 <th className="num">Entry</th>
@@ -108,6 +121,7 @@ export default function Dashboard() {
                   <td>
                     <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>
                   </td>
+                  <td><NewsChip p={p} /></td>
                   <td>
                     <div className="scorebar">
                       <i style={{ width: `${p.score}%` }} />

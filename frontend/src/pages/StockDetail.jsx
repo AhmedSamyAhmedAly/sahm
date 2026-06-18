@@ -128,6 +128,40 @@ export default function StockDetail() {
         </>
       )}
 
+      {(p?.news_label || d.news?.headlines?.length) && (
+        <>
+          <div className="section-title">News &amp; sentiment</div>
+          <div className="card" style={{ padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span className={`badge ${p?.news_label === "positive" ? "strong_buy" : p?.news_label === "negative" ? "sell" : "hold"}`}>
+                {(p?.news_label || "neutral").toUpperCase()}
+              </span>
+              {p?.news_catalyst && <span className="pill" style={{ color: "var(--amber)" }}>⚡ catalyst</span>}
+              {d.news?.risk_flag && <span className="pill" style={{ color: "var(--red)" }}>⚠ risk</span>}
+              {d.news?.engine && d.news.engine !== "keyword" && d.news.engine !== "none" && (
+                <span className="pill">AI: {d.news.engine}</span>
+              )}
+            </div>
+            {p?.news_thesis && <p style={{ marginBottom: 8 }}>{p.news_thesis}</p>}
+            <ul className="reasons" style={{ marginTop: 4 }}>
+              {(d.news?.headlines || []).map((h, i) => (
+                <li key={i}>
+                  <a href={h.url} target="_blank" rel="noreferrer">{h.title}</a>{" "}
+                  <small style={{ color: "var(--muted)" }}>{h.source}</small>
+                </li>
+              ))}
+              {(!d.news?.headlines || d.news.headlines.length === 0) && (
+                <li style={{ color: "var(--muted)" }}>No recent headlines found.</li>
+              )}
+            </ul>
+            <p className="disclaimer" style={{ marginTop: 8 }}>
+              Live news signal — <b>separate from the backtested Success %</b>. It nudges ranking
+              slightly and flags catalysts; it does not change the model's probability.
+            </p>
+          </div>
+        </>
+      )}
+
       <div className="section-title">Past calls &amp; outcomes</div>
       <div className="card" style={{ overflowX: "auto" }}>
         <table>

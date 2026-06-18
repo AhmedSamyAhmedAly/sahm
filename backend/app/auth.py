@@ -20,6 +20,11 @@ def verify_password(password: str, hashed: str) -> bool:
         return False
 
 
+def role_for_email(email: str) -> str:
+    """Single source of truth for roles: only the configured admin email is admin."""
+    return "admin" if email.lower() == settings.admin_email.lower() else "member"
+
+
 def create_token(user_id: int, email: str, role: str) -> str:
     now = dt.datetime.now(dt.timezone.utc)
     payload = {

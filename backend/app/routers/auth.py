@@ -1,11 +1,13 @@
 """Auth routes: invite-gated registration, login, current user."""
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import create_token, hash_password, verify_password
+from app.auth import create_token, hash_password, role_for_email, verify_password
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
@@ -25,10 +27,9 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if db.execute(select(User).where(User.email == email)).scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    # First registered user becomes admin.
-    is_first = (db.execute(select(func.count(User.id))).scalar() or 0) == 0
+    # Role is pinned by email — only the configured admin email is ever admin.
     user = User(email=email, hashed_password=hash_password(req.password),
-                role="admin" if is_first else "member")
+                role=role_for_email(email), is_active=True, last_login_at=_utcnow())
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -42,6 +43,13 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if not user or not verify_password(req.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Wrong email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account suspended — contact the admin")
+
+    # Reconcile role with the configured admin email on every login.
+    user.role = role_for_email(user.email)
+    user.last_login_at = _utcnow()
+    db.commit()
     token = create_token(user.id, user.email, user.role)
     return TokenResponse(access_token=token, email=user.email, role=user.role)
 
@@ -51,3 +59,7 @@ def me(user: User = Depends(get_current_user)):
     # Re-issue a fresh token alongside identity (handy for the SPA).
     token = create_token(user.id, user.email, user.role)
     return TokenResponse(access_token=token, email=user.email, role=user.role)
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)

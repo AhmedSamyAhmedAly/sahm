@@ -5,3 +5,6 @@ pandas>=2.2
 numpy>=1.26
 scikit-learn>=1.5
 joblib>=1.4
+# news sentiment (daily job only; not used by the web API) — either provider works
+openai>=1.40
+anthropic>=0.40

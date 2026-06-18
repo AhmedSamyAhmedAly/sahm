@@ -35,6 +35,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(256), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(256), nullable=False)
     role: Mapped[str] = mapped_column(String(16), default="member")  # admin | member
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # suspended = can't log in
+    last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     watchlist: Mapped[list["WatchlistItem"]] = relationship(
@@ -116,6 +118,12 @@ class Recommendation(Base):
     expected_hold_days: Mapped[float | None] = mapped_column(Float)
     reasons: Mapped[list | None] = mapped_column(JSON)  # list[str] explainability
     features: Mapped[dict | None] = mapped_column(JSON)  # snapshot used at call time
+    # --- live news overlay (shortlist only; separate from success_prob) ---
+    news_sentiment: Mapped[float | None] = mapped_column(Float)  # -1..1
+    news_label: Mapped[str | None] = mapped_column(String(16))  # positive|neutral|negative
+    news_thesis: Mapped[str | None] = mapped_column(String(512))  # one-line AI summary
+    news_catalyst: Mapped[bool | None] = mapped_column(Boolean)  # strong + recent
+    news: Mapped[dict | None] = mapped_column(JSON)  # {headlines:[...], risk_flag, ...}
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     outcome: Mapped["Outcome | None"] = relationship(

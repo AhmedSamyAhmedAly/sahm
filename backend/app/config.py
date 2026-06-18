@@ -16,9 +16,17 @@ class Settings(BaseSettings):
 
     # --- secrets ---
     eodhd_api_token: str = ""
+    # News sentiment LLM (daily job only). Either provider works; OpenAI is tried
+    # first if set, else Anthropic, else free keyword sentiment.
+    openai_api_token: str = ""
+    anthropic_api_token: str = ""
     database_url: str = "sqlite:///./sahm.db"
     jwt_secret: str = "change-me"
     invite_code: str = "sahm-invite"
+
+    # --- access ---
+    # The ONE admin. This email is always admin; everyone else is always member.
+    admin_email: str = "ahmed.samy@sahm.app"
 
     # --- web ---
     cors_origins: str = "http://localhost:5173"
@@ -48,6 +56,18 @@ class Settings(BaseSettings):
     # ATR-based trade levels.
     atr_stop_mult: float = 1.5     # stop = entry - 1.5 * ATR
     atr_period: int = 14
+
+    # --- news overlay (daily job only; never the web API) ---
+    news_enabled: bool = True
+    news_shortlist_n: int = 30           # only enrich the top N buy candidates (cost guard)
+    openai_model: str = "gpt-4o-mini"    # cheap; used when OPENAI_API_TOKEN is set
+    news_model: str = "claude-haiku-4-5"  # used when only ANTHROPIC_API_TOKEN is set
+    news_weight: float = 0.03            # light re-rank weight within the shortlist
+    news_langs: str = "ar,en"            # comma-separated
+
+    @property
+    def news_lang_list(self) -> list[str]:
+        return [s.strip() for s in self.news_langs.split(",") if s.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

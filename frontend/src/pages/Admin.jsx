@@ -1,0 +1,147 @@
+import { useEffect, useState } from "react";
+import { api } from "../api.js";
+import { useAuth } from "../auth.jsx";
+
+function Kpi({ label, value }) {
+  return (
+    <div className="kpi">
+      <div className="label">{label}</div>
+      <div className="value">{value}</div>
+    </div>
+  );
+}
+
+export default function Admin() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({ email: "", password: "", role: "member" });
+
+  const load = () => {
+    api.adminStats().then(setStats).catch((e) => setErr(e.message));
+    api.adminUsers().then(setUsers).catch((e) => setErr(e.message));
+  };
+  useEffect(load, []);
+
+  const wrap = async (fn) => {
+    setErr("");
+    setBusy(true);
+    try {
+      await fn();
+      load();
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addUser = (e) => {
+    e.preventDefault();
+    wrap(async () => {
+      await api.adminCreateUser(form.email, form.password, form.role);
+      setForm({ email: "", password: "", role: "member" });
+    });
+  };
+
+  const resetPw = (u) => {
+    const pw = window.prompt(`New password for ${u.email} (min 8 chars):`);
+    if (pw) wrap(() => api.adminUpdateUser(u.id, { password: pw }));
+  };
+  const toggleActive = (u) =>
+    wrap(() => api.adminUpdateUser(u.id, { is_active: !u.is_active }));
+  const del = (u) => {
+    if (window.confirm(`Delete ${u.email}? This cannot be undone.`))
+      wrap(() => api.adminDeleteUser(u.id));
+  };
+
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString() : "—");
+  const isAdminAcct = (u) => u.role === "admin";
+
+  return (
+    <div className="container">
+      <h2 style={{ marginTop: 0 }}>Admin</h2>
+      {err && <div className="error">{err}</div>}
+
+      {stats && (
+        <div className="kpis">
+          <Kpi label="Total users" value={stats.total_users} />
+          <Kpi label="Active" value={stats.active_users} />
+          <Kpi label="Logins (7d)" value={stats.logins_last_7d} />
+          <Kpi label="Last scan" value={stats.last_scan_date || "—"} />
+        </div>
+      )}
+
+      <div className="section-title">Add a member</div>
+      <div className="card" style={{ padding: 16, marginBottom: 18 }}>
+        <form onSubmit={addUser} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 220px" }}>
+            <label>Email</label>
+            <input type="email" required value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 180px" }}>
+            <label>Temp password (min 8)</label>
+            <input type="text" required minLength={8} value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          </div>
+          <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy}>
+            Add user
+          </button>
+        </form>
+        <p style={{ color: "var(--muted)", fontSize: 12, marginBottom: 0 }}>
+          New accounts are always <b>members</b>. Only <b>{user?.email}</b> is admin.
+        </p>
+      </div>
+
+      <div className="section-title">Users</div>
+      <div className="card" style={{ overflowX: "auto" }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th><th>Role</th><th>Status</th><th>Created</th>
+              <th>Last login</th><th className="num">Watchlist</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} style={{ cursor: "default" }}>
+                <td className="tickercell">{u.email}</td>
+                <td>
+                  <span className={`badge ${isAdminAcct(u) ? "strong_buy" : "buy"}`}>
+                    {u.role.toUpperCase()}
+                  </span>
+                </td>
+                <td>{u.is_active ? <span className="up">active</span> : <span className="down">suspended</span>}</td>
+                <td>{fmt(u.created_at)}</td>
+                <td>{fmt(u.last_login_at)}</td>
+                <td className="num">{u.watchlist_count}</td>
+                <td>
+                  {isAdminAcct(u) ? (
+                    <span className="pill">protected</span>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button className="ghost" disabled={busy} onClick={() => resetPw(u)}>Reset PW</button>
+                      <button className="ghost" disabled={busy} onClick={() => toggleActive(u)}>
+                        {u.is_active ? "Suspend" : "Activate"}
+                      </button>
+                      <button className="ghost" disabled={busy} onClick={() => del(u)}
+                        style={{ color: "var(--red)", borderColor: "var(--red)" }}>Delete</button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="disclaimer">
+        Roles are pinned by email — only the configured admin can be admin, and the admin account
+        can't be suspended or deleted here (safety lock).
+      </p>
+    </div>
+  );
+}
