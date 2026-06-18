@@ -1,0 +1,7 @@
+# Full deps for the engine/CLI/daily job (ingest, backtest, train, scan).
+# Install for local dev and in GitHub Actions: pip install -r requirements-engine.txt
+-r requirements.txt
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.5
+joblib>=1.4

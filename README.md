@@ -38,7 +38,7 @@ frontend/  React + Vite (Dashboard, Stock detail, Track record, Login)
 # backend
 cd backend
 python -m venv .venv && . .venv/Scripts/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-engine.txt                 # full deps (API + ML engine)
 python -m app.cli demo                                 # seed -> backtest -> scan
 uvicorn app.main:app --reload --port 8077
 
@@ -59,17 +59,20 @@ python -m app.cli daily           # ingest -> grade -> backtest -> scan
 
 ---
 
-## Deploy (public link for friends)
+## Deploy (public link for friends) — all free, no card
+
+Two Vercel projects (frontend + API) + Neon. (A `render.yaml` is also included if you
+prefer Render for the API.)
 
 1. **GitHub** — push this repo (public). Secrets stay out (only `.env.example`).
-2. **Neon** — create a free Postgres project; copy the connection string as
+2. **Neon** — create a free Postgres project; connection string as
    `postgresql+psycopg://USER:PASS@HOST/DB?sslmode=require`.
-3. **Render** — New ➜ Blueprint ➜ pick this repo (uses `render.yaml`). Set env vars:
-   `DATABASE_URL`, `EODHD_API_TOKEN`, `INVITE_CODE`, `CORS_ORIGINS` (your Vercel URL). Note the API URL.
-4. **Vercel** — New Project ➜ root `frontend/` ➜ set `VITE_API_URL` to the Render API URL. Deploy.
-   **The Vercel URL is the public link.**
+3. **API on Vercel** — New Project ➜ **root `backend/`** (uses `backend/vercel.json`, serverless
+   Python). Env vars: `DATABASE_URL`, `JWT_SECRET`, `INVITE_CODE`, `CORS_ORIGINS`. Note the API URL.
+4. **Frontend on Vercel** — New Project ➜ **root `frontend/`** ➜ set `VITE_API_URL` to the API URL.
+   **This Vercel URL is the public link.** Then set the API project's `CORS_ORIGINS` to this URL.
 5. **GitHub Actions** — add repo secrets `DATABASE_URL` + `EODHD_API_TOKEN`; the daily scan
-   (`.github/workflows/daily-scan.yml`) then refreshes picks automatically (Sun–Thu).
+   (`.github/workflows/daily-scan.yml`) refreshes picks automatically (Sun–Thu).
 
 One-time DB init / first data load (locally pointing at Neon, or via the Action):
 ```bash
