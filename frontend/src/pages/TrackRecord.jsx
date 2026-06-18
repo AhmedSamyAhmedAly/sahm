@@ -38,6 +38,47 @@ export default function TrackRecord() {
         <div className="kpi"><div className="label">Backtest cells</div><div className="value">{d.backtest.length}</div></div>
       </div>
 
+      {d.models?.length > 0 && (
+        <>
+          <div className="section-title">Model accuracy (out-of-sample, walk-forward)</div>
+          <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
+            Honest validation on years of unseen history. <b>Lift</b> = how much more often the
+            model's top picks hit target vs. the market baseline. AUC ~0.5 = no skill, ~0.6 = a real
+            (modest) edge.
+          </p>
+          <div className="card" style={{ overflowX: "auto", marginBottom: 18 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th className="num">AUC</th>
+                  <th className="num">Top-picks hit-rate</th>
+                  <th className="num">Baseline</th>
+                  <th className="num">Lift</th>
+                  <th className="num">Samples</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.models.map((m) => (
+                  <tr key={m.band_key} style={{ cursor: "default" }}>
+                    <td className="tickercell">
+                      +{Math.round(m.target_pct * 100)}% / {m.horizon_days}d
+                    </td>
+                    <td className="num">{m.auc?.toFixed(3) ?? "—"}</td>
+                    <td className="num prob"><b>{prob(m.precision_top10)}</b></td>
+                    <td className="num" style={{ color: "var(--muted)" }}>{prob(m.base_rate)}</td>
+                    <td className="num up">{m.lift_top10 ? `${m.lift_top10}×` : "—"}</td>
+                    <td className="num" style={{ color: "var(--muted)" }}>
+                      {m.n_samples.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       {d.equity_curve.length > 0 && (
         <div className="card" style={{ padding: 16, marginBottom: 18 }}>
           <div className="section-title" style={{ marginTop: 0 }}>Cumulative realized return (graded calls)</div>

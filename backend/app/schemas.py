@@ -83,9 +83,22 @@ class BacktestStatOut(BaseModel):
     avg_days_to_target: float | None
 
 
+class ModelMetricOut(BaseModel):
+    band_key: str
+    target_pct: float
+    horizon_days: int
+    algo: str
+    n_samples: int
+    auc: float | None = None
+    precision_top10: float | None = None
+    base_rate: float | None = None
+    lift_top10: float | None = None
+
+
 class TrackRecordResponse(BaseModel):
     live_win_rate: float | None
     live_graded: int
     live_avg_return: float | None
     backtest: list[BacktestStatOut]
     equity_curve: list[dict]   # cumulative realized return over time
+    models: list[ModelMetricOut] = []

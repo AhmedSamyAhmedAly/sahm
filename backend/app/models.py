@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    LargeBinary,
     Numeric,
     String,
     UniqueConstraint,
@@ -160,6 +161,24 @@ class BacktestStat(Base):
     avg_return: Mapped[float | None] = mapped_column(Float)
     avg_days_to_target: Mapped[float | None] = mapped_column(Float)
     computed_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class ModelVersion(Base):
+    """A trained ML model for one target band + its honest out-of-sample metrics."""
+
+    __tablename__ = "model_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    band_key: Mapped[str] = mapped_column(String(32), index=True)  # e.g. "t10_h10"
+    target_pct: Mapped[float] = mapped_column(Float)
+    horizon_days: Mapped[int] = mapped_column(Integer)
+    algo: Mapped[str] = mapped_column(String(32))                  # hgb | logreg
+    feature_set_version: Mapped[str] = mapped_column(String(16), default="1")
+    n_samples: Mapped[int] = mapped_column(Integer)
+    metrics: Mapped[dict | None] = mapped_column(JSON)            # auc, precision, base_rate...
+    artifact: Mapped[bytes | None] = mapped_column(LargeBinary)   # joblib-pickled pipeline
+    is_production: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    trained_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class PipelineRun(Base):

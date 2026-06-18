@@ -122,6 +122,25 @@ def signal_for(score: float) -> str:
     return "strong_sell"
 
 
+def ml_signal(prob: float, base_rate: float | None) -> str:
+    """Signal from a calibrated probability, relative to the market baseline.
+
+    Using the base rate keeps it honest: 'strong buy' means the model thinks this
+    stock is ~1.5x more likely than average to hit the target.
+    """
+    base = base_rate or 0.33
+    ratio = prob / base if base > 0 else 1.0
+    if ratio >= 1.5:
+        return "strong_buy"
+    if ratio >= 1.15:
+        return "buy"
+    if ratio >= 0.9:
+        return "hold"
+    if ratio >= 0.6:
+        return "sell"
+    return "strong_sell"
+
+
 def score_band(score: float) -> str:
     """Bucket a 0-100 score into a 10-wide band label, e.g. '80-90'."""
     lo = int(min(90, max(0, score // 10 * 10)))

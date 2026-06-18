@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import BacktestStat, Outcome, Recommendation, User
-from app.schemas import BacktestStatOut, TrackRecordResponse
+from app.models import BacktestStat, ModelVersion, Outcome, Recommendation, User
+from app.schemas import BacktestStatOut, ModelMetricOut, TrackRecordResponse
 
 router = APIRouter(prefix="/api", tags=["track-record"])
 
@@ -52,7 +52,24 @@ def track_record(db: Session = Depends(get_db), user: User = Depends(get_current
         equity.append({"date": str(rec.date), "ticker": rec.ticker,
                        "return_pct": oc.return_pct, "cumulative": round(cum, 2)})
 
+    # ML model metrics (honest out-of-sample).
+    mv_rows = db.execute(
+        select(ModelVersion).where(ModelVersion.is_production.is_(True))
+        .order_by(ModelVersion.target_pct)
+    ).scalars().all()
+    models = [
+        ModelMetricOut(
+            band_key=m.band_key, target_pct=m.target_pct, horizon_days=m.horizon_days,
+            algo=m.algo, n_samples=m.n_samples,
+            auc=(m.metrics or {}).get("auc"),
+            precision_top10=(m.metrics or {}).get("precision_top10"),
+            base_rate=(m.metrics or {}).get("base_rate"),
+            lift_top10=(m.metrics or {}).get("lift_top10"),
+        )
+        for m in mv_rows
+    ]
+
     return TrackRecordResponse(
         live_win_rate=win_rate, live_graded=n, live_avg_return=avg_ret,
-        backtest=backtest, equity_curve=equity,
+        backtest=backtest, equity_curve=equity, models=models,
     )

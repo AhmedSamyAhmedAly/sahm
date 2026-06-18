@@ -14,9 +14,10 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.engine import backtest as bt
+from app.engine import ml
 from app.engine.indicators import add_indicators, feature_row, MIN_BARS
 from app.engine.levels import trade_levels
-from app.engine.signals import score_features
+from app.engine.signals import ml_signal, score_features
 from app.models import Asset, DailyBar, Outcome, PipelineRun, Recommendation
 
 
@@ -38,6 +39,7 @@ def _load_bars(db: Session, ticker: str) -> pd.DataFrame:
 def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
     """Score every active asset for the latest bar and persist recommendations."""
     stats_map = bt.load_stats_map(db)
+    bundle = ml.ModelBundle(db)   # calibrated ML models, if trained
     primary_t = settings.primary_target_pct
     primary_h = settings.primary_horizon_days
 
@@ -68,12 +70,20 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
         levels = trade_levels(entry, atr, primary_t)
 
         stat = bt.lookup(stats_map, sc["score"], primary_t, primary_h)
-        success_prob = stat.hit_rate if stat else None
-        success_n = stat.n_samples if stat else None
+        # Prefer the calibrated ML probability; fall back to the backtest hit-rate.
+        ml_prob = bundle.prob(feats, primary_t, primary_h) if bundle.ready else None
+        if ml_prob is not None:
+            success_prob = ml_prob
+            success_n = bundle.test_n(primary_t, primary_h) or (stat.n_samples if stat else None)
+            signal = ml_signal(ml_prob, bundle.base_rate(primary_t, primary_h))
+        else:
+            success_prob = stat.hit_rate if stat else None
+            success_n = stat.n_samples if stat else None
+            signal = sc["signal"]
         expected_hold = stat.avg_days_to_target if stat else None
 
         db.add(Recommendation(
-            date=scan_date, ticker=a.ticker, signal=sc["signal"], score=sc["score"],
+            date=scan_date, ticker=a.ticker, signal=signal, score=sc["score"],
             success_prob=success_prob, success_n=success_n,
             target_pct=primary_t, horizon_days=primary_h,
             entry_price=levels["entry_price"], target_price=levels["target_price"],

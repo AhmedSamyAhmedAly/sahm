@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, nullslast, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -67,7 +67,11 @@ def get_picks(
         q = q.where(Recommendation.signal == signal)
     if sector:
         q = q.where(Asset.sector == sector)
-    q = q.order_by(Recommendation.score.desc()).limit(limit)
+    # Rank by calibrated success probability first (NULLs sort last in SQLite/PG
+    # under DESC), then by the rule score as a tiebreak.
+    q = q.order_by(
+        nullslast(Recommendation.success_prob.desc()), Recommendation.score.desc()
+    ).limit(limit)
 
     watched = {
         t for (t,) in db.execute(
