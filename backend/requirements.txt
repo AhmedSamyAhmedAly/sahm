@@ -1,0 +1,16 @@
+# Sahm backend — kept lean (rule-based engine + backtest, no heavy ML libs)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+pydantic>=2.7
+pydantic-settings>=2.3
+python-dotenv>=1.0
+requests>=2.31
+pandas>=2.2
+numpy>=1.26
+PyJWT>=2.8
+bcrypt>=4.1
+python-multipart>=0.0.9
+email-validator>=2.1
+# Postgres driver for prod (Neon). Local dev uses SQLite, no driver needed.
+psycopg[binary]>=3.1

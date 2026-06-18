@@ -1,0 +1,25 @@
+# Render Blueprint — deploys the Sahm API.
+# In Render: New + -> Blueprint -> pick this repo. Then set the secret env vars
+# marked `sync: false` in the dashboard (DATABASE_URL, EODHD_API_TOKEN, etc.).
+services:
+  - type: web
+    name: sahm-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DATABASE_URL          # Neon Postgres connection string
+        sync: false
+      - key: EODHD_API_TOKEN       # EODHD token (covering EGX)
+        sync: false
+      - key: INVITE_CODE           # code friends use to register
+        sync: false
+      - key: CORS_ORIGINS          # the Vercel site URL, e.g. https://sahm.vercel.app
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

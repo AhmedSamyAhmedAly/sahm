@@ -1,0 +1,144 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { api } from "../api.js";
+import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
+
+function Kpi({ label, value }) {
+  return (
+    <div className="kpi">
+      <div className="label">{label}</div>
+      <div className="value">{value}</div>
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const nav = useNavigate();
+  const [data, setData] = useState(null);
+  const [track, setTrack] = useState(null);
+  const [err, setErr] = useState("");
+  const [q, setQ] = useState("");
+  const [signal, setSignal] = useState("");
+  const [sort, setSort] = useState("score");
+
+  useEffect(() => {
+    api.picks({ limit: 300 }).then(setData).catch((e) => setErr(e.message));
+    api.trackRecord().then(setTrack).catch(() => {});
+  }, []);
+
+  const rows = useMemo(() => {
+    if (!data) return [];
+    let r = data.picks;
+    if (signal) r = r.filter((p) => p.signal === signal);
+    if (q) {
+      const s = q.toLowerCase();
+      r = r.filter(
+        (p) => p.ticker.toLowerCase().includes(s) || (p.name || "").toLowerCase().includes(s)
+      );
+    }
+    r = [...r].sort((a, b) => {
+      if (sort === "prob") return (b.success_prob || 0) - (a.success_prob || 0);
+      if (sort === "rr") return (b.risk_reward || 0) - (a.risk_reward || 0);
+      return b.score - a.score;
+    });
+    return r;
+  }, [data, q, signal, sort]);
+
+  if (err) return <div className="container"><div className="error">{err}</div></div>;
+  if (!data) return <div className="loading">Loading picks…</div>;
+
+  const strongBuys = data.picks.filter((p) => p.signal === "strong_buy").length;
+  const winRate = track?.live_win_rate;
+
+  return (
+    <div className="container">
+      <div className="kpis">
+        <Kpi label="Stocks scanned" value={data.active_count} />
+        <Kpi label="Strong buys today" value={strongBuys} />
+        <Kpi
+          label="Live win rate"
+          value={winRate == null ? "—" : `${Math.round(winRate * 100)}%`}
+        />
+        <Kpi label="Data date" value={data.date || "—"} />
+      </div>
+
+      <div className="card">
+        <div className="toolbar">
+          <strong style={{ fontSize: 16 }}>Today's Buys</strong>
+          <span className="pill">{rows.length} shown</span>
+          <div className="spacer" style={{ flex: 1 }} />
+          <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select value={signal} onChange={(e) => setSignal(e.target.value)}>
+            <option value="">All signals</option>
+            <option value="strong_buy">Strong buy</option>
+            <option value="buy">Buy</option>
+            <option value="hold">Hold</option>
+          </select>
+          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+            <option value="score">Sort: Score</option>
+            <option value="prob">Sort: Success %</option>
+            <option value="rr">Sort: Risk/Reward</option>
+          </select>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Stock</th>
+                <th>Signal</th>
+                <th>Score</th>
+                <th>Success %</th>
+                <th className="num">Entry</th>
+                <th className="num">Target</th>
+                <th className="num">Stop</th>
+                <th className="num hide-sm">R:R</th>
+                <th className="num hide-sm">Hold</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p) => (
+                <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
+                  <td className="num">{p.rank}</td>
+                  <td className="tickercell">
+                    {p.ticker.replace(".EGX", "")}
+                    <small>{p.name}</small>
+                  </td>
+                  <td>
+                    <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>
+                  </td>
+                  <td>
+                    <div className="scorebar">
+                      <i style={{ width: `${p.score}%` }} />
+                    </div>
+                    <small style={{ color: "var(--muted)" }}>{p.score}</small>
+                  </td>
+                  <td className="prob">
+                    <b>{prob(p.success_prob)}</b>{" "}
+                    <small>
+                      →+{Math.round((p.target_pct || 0) * 100)}% / {p.horizon_days}d
+                      {p.success_n ? ` · n=${p.success_n}` : ""}
+                    </small>
+                  </td>
+                  <td className="num">{money(p.entry_price)}</td>
+                  <td className="num up">{money(p.target_price)}</td>
+                  <td className="num down">{money(p.stop_loss)}</td>
+                  <td className="num hide-sm">{p.risk_reward ?? "—"}</td>
+                  <td className="num hide-sm">
+                    {p.expected_hold_days ? `~${Math.round(p.expected_hold_days)}d` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p className="disclaimer">
+        <b>Success %</b> is the historical, backtested hit-rate for stocks in the same score band —
+        not a guarantee. Educational/research tool, <b>not financial advice</b>.
+      </p>
+    </div>
+  );
+}

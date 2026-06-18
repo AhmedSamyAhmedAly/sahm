@@ -1,0 +1,26 @@
+name: Daily EGX scan
+
+# Runs the full pipeline in the cloud against Neon, so picks refresh every
+# trading day before the EGX open (10:00 Cairo). Sun-Thu only.
+on:
+  schedule:
+    - cron: "30 6 * * 0-4" # 06:30 UTC ~ 08:30/09:30 Cairo, before the 10:00 open
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run daily pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+        run: python -m app.cli daily
