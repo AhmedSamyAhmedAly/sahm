@@ -25,7 +25,9 @@ app = FastAPI(title="Sahm — EGX Signals API", version="1.0.0", lifespan=lifesp
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
+    # Auth is via Bearer token in the Authorization header (no cookies), so we
+    # don't need credentialed CORS — this lets "*" be used safely if desired.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
