@@ -44,8 +44,6 @@ export const api = {
   },
   stock: (ticker) => request(`/api/stocks/${encodeURIComponent(ticker)}`),
   trackRecord: () => request("/api/track-record"),
-  watch: (ticker, on) =>
-    request(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: on ? "POST" : "DELETE" }),
 
   assets: () => request("/api/assets"),
 

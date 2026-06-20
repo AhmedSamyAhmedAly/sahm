@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Asset, Recommendation, User, WatchlistItem
+from app.models import Asset, Recommendation, User
 from app.schemas import PickOut, PicksResponse
 
 router = APIRouter(prefix="/api", tags=["picks"])
@@ -34,7 +34,7 @@ def band_override(rec: Recommendation, target: float | None, horizon: int | None
     }
 
 
-def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool,
+def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
              ov: dict | None = None) -> PickOut:
     feats = rec.features or {}
     ov = ov or {}
@@ -56,7 +56,6 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool,
         risk_reward=ov.get("risk_reward", feats.get("risk_reward")),
         expected_hold_days=ov.get("expected_hold", rec.expected_hold_days),
         reasons=rec.reasons or [],
-        watched=watched,
         news_sentiment=rec.news_sentiment,
         news_label=rec.news_label,
         news_thesis=rec.news_thesis,
@@ -103,12 +102,6 @@ def get_picks(
         q = q.where(Asset.sector == sector)
     rows = db.execute(q).all()
 
-    watched = {
-        t for (t,) in db.execute(
-            select(WatchlistItem.ticker).where(WatchlistItem.user_id == user.id)
-        ).all()
-    }
-
     # Apply the chosen band, filter on the effective signal, then rank by the
     # effective success probability (with a light news nudge).
     w = settings.news_weight
@@ -124,7 +117,7 @@ def get_picks(
     items.sort(key=lambda x: x[3], reverse=True)
     items = items[:limit]
     picks = [
-        _to_pick(i + 1, rec, asset, rec.ticker in watched, ov)
+        _to_pick(i + 1, rec, asset, ov)
         for i, (rec, asset, ov, _) in enumerate(items)
     ]
     return PicksResponse(

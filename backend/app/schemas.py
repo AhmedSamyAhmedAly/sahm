@@ -27,7 +27,6 @@ class AdminUserOut(BaseModel):
     is_primary: bool = False   # the protected bootstrap admin (ADMIN_EMAIL)
     created_at: dt.datetime | None = None
     last_login_at: dt.datetime | None = None
-    watchlist_count: int = 0
 
 
 class CreateUserRequest(BaseModel):
@@ -177,7 +176,6 @@ class PickOut(BaseModel):
     risk_reward: float | None = None
     expected_hold_days: float | None = None
     reasons: list[str] = []
-    watched: bool = False
     # live news overlay (separate from success_prob)
     news_sentiment: float | None = None
     news_label: str | None = None

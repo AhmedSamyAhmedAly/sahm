@@ -107,7 +107,7 @@ export default function Admin() {
           <thead>
             <tr>
               <th>Email</th><th>Role</th><th>Status</th><th>Created</th>
-              <th>Last login</th><th className="num">Watchlist</th><th>Actions</th>
+              <th>Last login</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -122,7 +122,6 @@ export default function Admin() {
                 <td data-label="Status">{u.is_active ? <span className="up">active</span> : <span className="down">suspended</span>}</td>
                 <td data-label="Created">{fmt(u.created_at)}</td>
                 <td data-label="Last login">{fmt(u.last_login_at)}</td>
-                <td className="num" data-label="Watchlist">{u.watchlist_count}</td>
                 <td data-label="Actions">
                   {u.is_primary ? (
                     <span className="pill">primary admin</span>

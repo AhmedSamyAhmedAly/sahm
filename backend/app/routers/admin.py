@@ -15,7 +15,7 @@ from app.auth import hash_password, role_for_email
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
-from app.models import Asset, ContactMessage, DailyBar, Recommendation, User, WatchlistItem
+from app.models import Asset, ContactMessage, DailyBar, Recommendation, User
 from app.schemas import (
     AdminStats, AdminUserOut, ContactMessageOut, CreateUserRequest, UpdateUserRequest,
 )
@@ -27,25 +27,18 @@ def _is_the_admin(email: str) -> bool:
     return email.lower() == settings.admin_email.lower()
 
 
-def _to_out(u: User, watch_count: int) -> AdminUserOut:
+def _to_out(u: User) -> AdminUserOut:
     return AdminUserOut(
         id=u.id, email=u.email, role=u.role, is_active=u.is_active,
         is_primary=_is_the_admin(u.email),
         created_at=u.created_at, last_login_at=u.last_login_at,
-        watchlist_count=watch_count,
     )
 
 
 @router.get("/users", response_model=list[AdminUserOut])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    counts = dict(
-        db.execute(
-            select(WatchlistItem.user_id, func.count(WatchlistItem.id))
-            .group_by(WatchlistItem.user_id)
-        ).all()
-    )
     users = db.execute(select(User).order_by(User.created_at)).scalars().all()
-    return [_to_out(u, counts.get(u.id, 0)) for u in users]
+    return [_to_out(u) for u in users]
 
 
 @router.post("/users", response_model=AdminUserOut)
@@ -62,7 +55,7 @@ def create_user(req: CreateUserRequest, db: Session = Depends(get_db),
     db.add(user)
     db.commit()
     db.refresh(user)
-    return _to_out(user, 0)
+    return _to_out(user)
 
 
 @router.patch("/users/{user_id}", response_model=AdminUserOut)
@@ -95,10 +88,7 @@ def update_user(user_id: int, req: UpdateUserRequest, db: Session = Depends(get_
 
     db.commit()
     db.refresh(user)
-    count = db.execute(
-        select(func.count(WatchlistItem.id)).where(WatchlistItem.user_id == user.id)
-    ).scalar() or 0
-    return _to_out(user, count)
+    return _to_out(user)
 
 
 @router.delete("/users/{user_id}")

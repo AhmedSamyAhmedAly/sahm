@@ -1,4 +1,4 @@
-"""Stock detail + per-user watchlist."""
+"""Stock detail."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Asset, DailyBar, Outcome, Recommendation, User, WatchlistItem
+from app.models import Asset, DailyBar, Outcome, Recommendation, User
 from app.routers.picks import _to_pick
 from app.schemas import BarOut, StockDetail
 
@@ -45,13 +45,7 @@ def stock_detail(
             .where(Recommendation.ticker == ticker, Recommendation.date == latest_date)
         ).scalar_one_or_none()
 
-    watched = db.execute(
-        select(WatchlistItem).where(
-            WatchlistItem.user_id == user.id, WatchlistItem.ticker == ticker
-        )
-    ).scalar_one_or_none() is not None
-
-    latest_pick = _to_pick(1, latest_rec, asset, watched) if latest_rec else None
+    latest_pick = _to_pick(1, latest_rec, asset) if latest_rec else None
     components = (latest_rec.features or {}).get("components") if latest_rec else None
 
     # Past calls + how they turned out.
@@ -82,30 +76,6 @@ def stock_detail(
         latest=latest_pick, components=components, bars=bar_list, history=history,
         news=(latest_rec.news if latest_rec else None),
     )
-
-
-@router.post("/watchlist/{ticker}")
-def add_watch(ticker: str, db: Session = Depends(get_db),
-              user: User = Depends(get_current_user)):
-    exists = db.execute(
-        select(WatchlistItem).where(
-            WatchlistItem.user_id == user.id, WatchlistItem.ticker == ticker
-        )
-    ).scalar_one_or_none()
-    if not exists:
-        db.add(WatchlistItem(user_id=user.id, ticker=ticker))
-        db.commit()
-    return {"ticker": ticker, "watched": True}
-
-
-@router.delete("/watchlist/{ticker}")
-def remove_watch(ticker: str, db: Session = Depends(get_db),
-                 user: User = Depends(get_current_user)):
-    db.query(WatchlistItem).filter(
-        WatchlistItem.user_id == user.id, WatchlistItem.ticker == ticker
-    ).delete()
-    db.commit()
-    return {"ticker": ticker, "watched": False}
 
 
 def _f(x) -> float | None:

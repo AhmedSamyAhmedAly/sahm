@@ -18,16 +18,9 @@ export default function StockDetail() {
   const nav = useNavigate();
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
-  const [watched, setWatched] = useState(false);
 
   useEffect(() => {
-    api
-      .stock(ticker)
-      .then((r) => {
-        setD(r);
-        setWatched(r.latest?.watched || false);
-      })
-      .catch((e) => setErr(e.message));
+    api.stock(ticker).then(setD).catch((e) => setErr(e.message));
   }, [ticker]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
@@ -35,10 +28,6 @@ export default function StockDetail() {
 
   const p = d.latest;
   const chart = d.bars.map((b) => ({ date: b.date, close: b.close }));
-  const toggleWatch = async () => {
-    await api.watch(ticker, !watched);
-    setWatched(!watched);
-  };
 
   return (
     <div className="container">
@@ -48,9 +37,6 @@ export default function StockDetail() {
           {ticker.replace(".EGX", "")} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 16 }}>{d.name}</span>
         </h2>
         <div style={{ flex: 1 }} />
-        <button className="ghost" onClick={toggleWatch}>
-          {watched ? "★ Watching" : "☆ Watch"}
-        </button>
       </div>
 
       <div className="detail-grid">
