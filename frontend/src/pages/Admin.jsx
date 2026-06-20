@@ -15,6 +15,7 @@ export default function Admin() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", role: "member" });
@@ -22,6 +23,7 @@ export default function Admin() {
   const load = () => {
     api.adminStats().then(setStats).catch((e) => setErr(e.message));
     api.adminUsers().then(setUsers).catch((e) => setErr(e.message));
+    api.adminMessages().then(setMessages).catch(() => {});
   };
   useEffect(load, []);
 
@@ -54,6 +56,7 @@ export default function Admin() {
     wrap(() => api.adminUpdateUser(u.id, { is_active: !u.is_active }));
   const toggleRole = (u) =>
     wrap(() => api.adminUpdateUser(u.id, { role: u.role === "admin" ? "member" : "admin" }));
+  const resolveMsg = (m) => wrap(() => api.resolveMessage(m.id));
   const del = (u) => {
     if (window.confirm(`Delete ${u.email}? This cannot be undone.`))
       wrap(() => api.adminDeleteUser(u.id));
@@ -148,9 +151,38 @@ export default function Admin() {
         </table>
       </div>
 
+      <div className="section-title">Messages</div>
+      <div className="card" style={{ padding: 16 }}>
+        {messages.length === 0 && <p style={{ color: "var(--muted)", margin: 0 }}>No messages yet.</p>}
+        {messages.map((m) => (
+          <div key={m.id} style={{ borderBottom: "1px solid var(--border)", padding: "12px 0" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <b>{m.title}</b>
+              {m.resolved && <span className="pill" style={{ color: "var(--green)" }}>resolved</span>}
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                {m.email}{m.created_at ? ` · ${new Date(m.created_at).toLocaleString()}` : ""}
+              </span>
+              <div style={{ flex: 1 }} />
+              <button className="ghost" disabled={busy} onClick={() => resolveMsg(m)}>
+                {m.resolved ? "Reopen" : "Resolve"}
+              </button>
+            </div>
+            {m.description && <p style={{ margin: "6px 0", whiteSpace: "pre-wrap" }}>{m.description}</p>}
+            {m.attachments?.length > 0 && (
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {m.attachments.map((a, i) => (
+                  <a key={i} className="link" download={a.name}
+                    href={`data:${a.type || "application/octet-stream"};base64,${a.data}`}>📎 {a.name}</a>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
       <p className="disclaimer">
-        Roles are pinned by email — only the configured admin can be admin, and the admin account
-        can't be suspended or deleted here (safety lock).
+        Only the <b>primary admin</b> (pinned by email) is protected; other admins you grant can be
+        managed here. Roles, suspensions and deletes are enforced server-side.
       </p>
     </div>
   );

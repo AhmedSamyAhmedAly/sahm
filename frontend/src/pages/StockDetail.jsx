@@ -47,7 +47,6 @@ export default function StockDetail() {
         <h2 style={{ margin: 0 }}>
           {ticker.replace(".EGX", "")} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 16 }}>{d.name}</span>
         </h2>
-        {p && <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>}
         <div style={{ flex: 1 }} />
         <button className="ghost" onClick={toggleWatch}>
           {watched ? "★ Watching" : "☆ Watch"}
@@ -73,33 +72,11 @@ export default function StockDetail() {
                 labelStyle={{ color: "#8a97ad" }}
               />
               <Area type="monotone" dataKey="close" stroke="#3ddc97" strokeWidth={2} fill="url(#g)" />
-              {p?.entry_price && <ReferenceLine y={p.entry_price} stroke="#4aa8ff" strokeDasharray="4 4" label={{ value: "Entry", fill: "#4aa8ff", fontSize: 11, position: "insideTopLeft" }} />}
-              {p?.target_price && <ReferenceLine y={p.target_price} stroke="#2ecc71" strokeDasharray="4 4" label={{ value: "Target", fill: "#2ecc71", fontSize: 11, position: "insideTopLeft" }} />}
-              {p?.stop_loss && <ReferenceLine y={p.stop_loss} stroke="#ff5d5d" strokeDasharray="4 4" label={{ value: "Stop", fill: "#ff5d5d", fontSize: 11, position: "insideBottomLeft" }} />}
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         <div>
-          {p && (
-            <div className="card" style={{ padding: 16, marginBottom: 16 }}>
-              <div className="section-title" style={{ marginTop: 0 }}>Trade plan</div>
-              <div className="levels">
-                <div className="level"><div className="l">Entry</div><div className="v">{money(p.entry_price)}</div></div>
-                <div className="level"><div className="l">Target +{Math.round((p.target_pct||0)*100)}%</div><div className="v up">{money(p.target_price)}</div></div>
-                <div className="level"><div className="l">Stop</div><div className="v down">{money(p.stop_loss)}</div></div>
-              </div>
-              <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between" }}>
-                <div><div className="l" style={{ color: "var(--muted)", fontSize: 12 }}>Success rate</div>
-                  <div className="prob"><b style={{ fontSize: 20 }}>{prob(p.success_prob)}</b></div>
-                </div>
-                <div style={{ textAlign: "right" }}><div className="l" style={{ color: "var(--muted)", fontSize: 12 }}>Risk / Reward</div>
-                  <div style={{ fontSize: 20, fontWeight: 800 }}>{p.risk_reward ?? "—"}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {d.components && (
             <div className="card" style={{ padding: 16 }}>
               <div className="section-title" style={{ marginTop: 0 }}>Score breakdown</div>

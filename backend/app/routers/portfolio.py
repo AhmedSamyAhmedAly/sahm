@@ -16,7 +16,7 @@ from app.deps import get_current_user
 from app.models import Asset, DailyBar, Holding, Recommendation, User
 from app.schemas import (
     AllocationItem, AllocationResponse, BudgetIn, BulkHoldingsIn, BulkResult,
-    HoldingIn, HoldingOut, HoldingUpdate, PortfolioResponse,
+    HoldingIn, HoldingOut, HoldingUpdate, PortfolioResponse, SellIn,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -82,27 +82,80 @@ def _enrich(h: Holding, names: dict, closes: dict, recs: dict) -> HoldingOut:
         pnl_pct=round(pnl_pct, 2) if pnl_pct is not None else None,
         signal=signal, success_prob=(rec.success_prob if rec else None),
         target_price=target, stop_loss=stop, alert=alert, sell_suggested=sell,
+        sold_qty=float(h.sold_qty or 0),
+        avg_sell_price=(float(h.avg_sell_price) if h.avg_sell_price is not None else None),
+        realized_pnl=round(float(h.realized_pnl or 0), 2),
     )
+
+
+def _add_or_average(db: Session, user_id: int, ticker: str, buy_price: float, qty: float) -> Holding:
+    """Average-in if an open position in this ticker already exists, else create one."""
+    existing = db.execute(
+        select(Holding).where(Holding.user_id == user_id, Holding.ticker == ticker,
+                              Holding.closed.is_(False))
+    ).scalars().first()
+    if existing and float(existing.quantity) > 0:
+        old_q = float(existing.quantity)
+        new_q = old_q + qty
+        existing.buy_price = round((float(existing.buy_price) * old_q + buy_price * qty) / new_q, 4)
+        existing.quantity = new_q
+        return existing
+    h = Holding(user_id=user_id, ticker=ticker, buy_price=buy_price, quantity=qty)
+    db.add(h)
+    return h
 
 
 @router.get("", response_model=PortfolioResponse)
 def get_portfolio(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    holdings = db.execute(
+    all_holdings = db.execute(
         select(Holding).where(Holding.user_id == user.id).order_by(Holding.created_at)
     ).scalars().all()
     names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
     closes, _ = _latest_closes(db)
     recs = _latest_recs(db)
 
-    out = [_enrich(h, names, closes, recs) for h in holdings]
+    realized_total = sum(float(h.realized_pnl or 0) for h in all_holdings)
+    open_holdings = [h for h in all_holdings if not h.closed and float(h.quantity) > 0]
+    out = [_enrich(h, names, closes, recs) for h in open_holdings]
     invested = sum(h.invested for h in out)
     current = sum(h.current_value or h.invested for h in out)
     pnl = current - invested
     return PortfolioResponse(
         budget=user.budget, invested=round(invested, 2), current_value=round(current, 2),
         pnl=round(pnl, 2), pnl_pct=(round(pnl / invested * 100, 2) if invested else None),
+        realized_pnl=round(realized_total, 2), earnings=round(pnl + realized_total, 2),
         holdings=out,
     )
+
+
+@router.post("/holdings/{holding_id}/sell", response_model=HoldingOut)
+def sell_holding(holding_id: int, req: SellIn, db: Session = Depends(get_db),
+                 user: User = Depends(get_current_user)):
+    h = db.get(Holding, holding_id)
+    if h is None or h.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    if req.sell_price <= 0 or req.units <= 0:
+        raise HTTPException(status_code=400, detail="Sell price and units must be positive")
+    units = min(req.units, float(h.quantity))
+    if units <= 0:
+        raise HTTPException(status_code=400, detail="Nothing left to sell")
+
+    gain = (req.sell_price - float(h.buy_price)) * units
+    old_sold = float(h.sold_qty or 0)
+    old_avg = float(h.avg_sell_price or 0)
+    new_sold = old_sold + units
+    h.avg_sell_price = round((old_avg * old_sold + req.sell_price * units) / new_sold, 4)
+    h.sold_qty = new_sold
+    h.realized_pnl = float(h.realized_pnl or 0) + gain
+    h.quantity = float(h.quantity) - units
+    if h.quantity <= 1e-9:
+        h.quantity = 0
+        h.closed = True
+    db.commit()
+    db.refresh(h)
+    names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
+    closes, _ = _latest_closes(db)
+    return _enrich(h, names, closes, _latest_recs(db))
 
 
 @router.get("/history")
@@ -142,7 +195,8 @@ def history(db: Session = Depends(get_db), user: User = Depends(get_current_user
     for d in sorted(by_date):
         last.update(by_date[d])
         value = sum(last.get(t, 0.0) * qty[t] for t in tickers)
-        series.append({"date": str(d), "value": round(value, 2), "invested": round(invested, 2)})
+        series.append({"date": str(d), "value": round(value, 2),
+                       "invested": round(invested, 2), "profit": round(value - invested, 2)})
     return {"series": series, "invested": round(invested, 2)}
 
 
@@ -152,8 +206,7 @@ def add_holding(req: HoldingIn, db: Session = Depends(get_db),
     ticker = _norm_ticker(req.ticker)
     if req.buy_price <= 0 or req.quantity <= 0:
         raise HTTPException(status_code=400, detail="Buy price and quantity must be positive")
-    h = Holding(user_id=user.id, ticker=ticker, buy_price=req.buy_price, quantity=req.quantity)
-    db.add(h)
+    h = _add_or_average(db, user.id, ticker, req.buy_price, req.quantity)
     db.commit()
     db.refresh(h)
     names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
@@ -191,8 +244,7 @@ def import_holdings(req: BulkHoldingsIn, db: Session = Depends(get_db),
             if it.buy_price <= 0 or it.quantity <= 0:
                 errors.append(f"{it.ticker}: price/quantity must be positive")
                 continue
-            db.add(Holding(user_id=user.id, ticker=_norm_ticker(it.ticker),
-                           buy_price=it.buy_price, quantity=it.quantity))
+            _add_or_average(db, user.id, _norm_ticker(it.ticker), it.buy_price, it.quantity)
             added += 1
         except Exception as e:  # noqa: BLE001
             errors.append(f"{it.ticker}: {e}")

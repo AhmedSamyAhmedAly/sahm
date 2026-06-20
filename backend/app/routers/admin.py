@@ -15,8 +15,10 @@ from app.auth import hash_password, role_for_email
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
-from app.models import Asset, DailyBar, Recommendation, User, WatchlistItem
-from app.schemas import AdminStats, AdminUserOut, CreateUserRequest, UpdateUserRequest
+from app.models import Asset, ContactMessage, DailyBar, Recommendation, User, WatchlistItem
+from app.schemas import (
+    AdminStats, AdminUserOut, ContactMessageOut, CreateUserRequest, UpdateUserRequest,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -110,6 +112,31 @@ def delete_user(user_id: int, db: Session = Depends(get_db),
     db.delete(user)
     db.commit()
     return {"deleted": user_id}
+
+
+@router.get("/messages", response_model=list[ContactMessageOut])
+def list_messages(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    rows = db.execute(
+        select(ContactMessage).order_by(ContactMessage.created_at.desc())
+    ).scalars().all()
+    return [
+        ContactMessageOut(
+            id=m.id, email=m.email, title=m.title, description=m.description,
+            attachments=m.attachments or [], resolved=m.resolved, created_at=m.created_at,
+        )
+        for m in rows
+    ]
+
+
+@router.post("/messages/{message_id}/resolve")
+def resolve_message(message_id: int, db: Session = Depends(get_db),
+                    _: User = Depends(require_admin)):
+    m = db.get(ContactMessage, message_id)
+    if m is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    m.resolved = not m.resolved
+    db.commit()
+    return {"resolved": m.resolved}
 
 
 @router.get("/stats", response_model=AdminStats)

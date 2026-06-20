@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db, init_db
 from app.models import Asset, DailyBar, PipelineRun, Recommendation, User
-from app.routers import admin, auth, picks, portfolio, stocks, track_record
+from app.routers import admin, auth, contact, picks, portfolio, stocks, track_record
 
 
 @asynccontextmanager
@@ -62,6 +62,7 @@ def status(db: Session = Depends(get_db)):
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(contact.router)
 app.include_router(picks.router)
 app.include_router(portfolio.router)
 app.include_router(stocks.router)

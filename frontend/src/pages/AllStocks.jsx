@@ -1,6 +1,6 @@
 import PicksView from "../components/PicksView.jsx";
 
-// Browse the whole scanned universe with every signal (buy/hold/sell).
+// Browse the whole scanned universe — just a searchable name list.
 export default function AllStocks() {
-  return <PicksView title="All Stocks" />;
+  return <PicksView minimal title="All Stocks" />;
 }

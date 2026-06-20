@@ -59,6 +59,8 @@ export const api = {
   importHoldings: (items) =>
     request("/api/portfolio/holdings/bulk", { method: "POST", body: { items } }),
   deleteHolding: (id) => request(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
+  sellHolding: (id, sell_price, units) =>
+    request(`/api/portfolio/holdings/${id}/sell`, { method: "POST", body: { sell_price, units } }),
   setBudget: (budget) => request("/api/portfolio/budget", { method: "PUT", body: { budget } }),
   allocate: (budget) => request("/api/portfolio/allocate", { method: "POST", body: { budget } }),
 
@@ -70,4 +72,10 @@ export const api = {
   adminUpdateUser: (id, patch) =>
     request(`/api/admin/users/${id}`, { method: "PATCH", body: patch }),
   adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
+  adminMessages: () => request("/api/admin/messages"),
+  resolveMessage: (id) => request(`/api/admin/messages/${id}/resolve`, { method: "POST" }),
+
+  // ---- contact ----
+  contact: (title, description, attachments) =>
+    request("/api/contact", { method: "POST", body: { title, description, attachments } }),
 };

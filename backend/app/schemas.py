@@ -62,10 +62,13 @@ class HoldingOut(BaseModel):
     pnl_pct: float | None = None
     signal: str | None = None
     success_prob: float | None = None
-    target_price: float | None = None
+    target_price: float | None = None   # suggested target sell price
     stop_loss: float | None = None
     alert: str | None = None          # e.g. "Signal turned sell", "Target reached"
     sell_suggested: bool = False
+    sold_qty: float = 0
+    avg_sell_price: float | None = None
+    realized_pnl: float = 0
 
 
 class HoldingUpdate(BaseModel):
@@ -87,13 +90,36 @@ class PortfolioResponse(BaseModel):
     budget: float | None = None
     invested: float = 0
     current_value: float = 0
-    pnl: float = 0
+    pnl: float = 0                 # unrealized P/L on open holdings
     pnl_pct: float | None = None
+    realized_pnl: float = 0        # banked from sells
+    earnings: float = 0            # realized + unrealized
     holdings: list[HoldingOut] = []
 
 
 class BudgetIn(BaseModel):
     budget: float
+
+
+class SellIn(BaseModel):
+    sell_price: float
+    units: float
+
+
+class ContactIn(BaseModel):
+    title: str
+    description: str | None = None
+    attachments: list[dict] = []   # [{name, type, data(base64)}]
+
+
+class ContactMessageOut(BaseModel):
+    id: int
+    email: str | None = None
+    title: str
+    description: str | None = None
+    attachments: list[dict] = []
+    resolved: bool = False
+    created_at: dt.datetime | None = None
 
 
 class AllocationItem(BaseModel):

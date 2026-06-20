@@ -31,21 +31,20 @@ export default function Portfolio() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "" });
-  const [initBudget, setInitBudget] = useState("");
-  const [step, setStep] = useState(1000);
+  const [msg, setMsg] = useState("");
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ buy_price: "", quantity: "" });
-  const [msg, setMsg] = useState("");
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetInput, setBudgetInput] = useState("");
+  const [sellFor, setSellFor] = useState(null);
+  const [sellForm, setSellForm] = useState({ sell_price: "", units: "" });
   const fileRef = useRef(null);
 
   const load = async () => {
     const d = await api.portfolio();
     setPf(d);
-    if (d.budget > 0) {
-      try { setAlloc(await api.allocate(d.budget)); } catch { setAlloc(null); }
-    } else {
-      setAlloc(null);
-    }
+    if (d.budget > 0) { try { setAlloc(await api.allocate(d.budget)); } catch { setAlloc(null); } }
+    else setAlloc(null);
   };
 
   useEffect(() => {
@@ -70,20 +69,10 @@ export default function Portfolio() {
       setForm({ ticker: "", buy_price: "", quantity: "" });
     });
   };
-  const sell = (h) => {
-    if (window.confirm(`Sell (close) your ${h.ticker.replace(".EGX", "")} position?`))
+  const removeHolding = (h) => {
+    if (window.confirm(`Remove ${h.ticker.replace(".EGX", "")} from your portfolio?`))
       wrap(() => api.deleteHolding(h.id));
   };
-  const changeBudget = (delta) => {
-    const nb = Math.max(0, (pf.budget || 0) + delta);
-    wrap(async () => { await api.setBudget(nb); setUserBudget(nb); });
-  };
-  const setStartBudget = () => {
-    const nb = Math.max(0, parseFloat(initBudget) || 0);
-    if (nb <= 0) { setErr("Enter a budget greater than 0"); return; }
-    wrap(async () => { await api.setBudget(nb); setUserBudget(nb); });
-  };
-
   const startEdit = (h) => { setEditId(h.id); setEditForm({ buy_price: h.buy_price, quantity: h.quantity }); };
   const saveEdit = (h) => wrap(async () => {
     await api.updateHolding(h.id, {
@@ -91,6 +80,25 @@ export default function Portfolio() {
     });
     setEditId(null);
   });
+
+  const openSell = (h) => {
+    setSellFor(h);
+    setSellForm({ sell_price: h.current_price ?? "", units: h.quantity });
+  };
+  const confirmSell = () => {
+    const price = parseFloat(sellForm.sell_price), units = parseFloat(sellForm.units);
+    if (!(price > 0) || !(units > 0)) { setErr("Enter a valid sell price and units"); return; }
+    wrap(async () => {
+      await api.sellHolding(sellFor.id, price, units);
+      setSellFor(null);
+    });
+  };
+
+  const saveBudget = (val) => {
+    const nb = Math.max(0, parseFloat(val) || 0);
+    if (nb <= 0) { setErr("Enter a budget greater than 0"); return; }
+    wrap(async () => { await api.setBudget(nb); setUserBudget(nb); setEditingBudget(false); });
+  };
 
   const onCsv = (e) => {
     const file = e.target.files?.[0];
@@ -135,46 +143,44 @@ export default function Portfolio() {
       {isNew && (
         <div className="card" style={{ padding: 18, marginBottom: 18, borderColor: "var(--accent)" }}>
           <h3 style={{ marginTop: 0 }}>👋 Welcome to your Portfolio</h3>
-          <p style={{ color: "var(--muted)", marginBottom: 8 }}>Two quick steps to get started:</p>
           <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
             <li><b>Set your budget</b> below — the cash you want to invest.</li>
-            <li><b>Add stocks you already own</b> (ticker, buy price, quantity).</li>
+            <li><b>Add stocks you own</b> (ticker, buy price, quantity) — or Import CSV.</li>
           </ol>
-          <p style={{ color: "var(--muted)", marginTop: 8, marginBottom: 0 }}>
-            We'll then suggest how to split your budget across the best signals.
-          </p>
         </div>
       )}
 
       <div className="kpis">
         <Kpi label="Invested" value={money(pf.invested)} />
         <Kpi label="Current value" value={money(pf.current_value)} />
-        <Kpi label="Total P/L" value={`${pf.pnl >= 0 ? "+" : ""}${money(pf.pnl)}${pf.pnl_pct != null ? ` (${signed(pf.pnl_pct)})` : ""}`} cls={pnlCls(pf.pnl)} />
+        <Kpi label="Earnings" cls={pnlCls(pf.earnings)}
+          value={`${pf.earnings >= 0 ? "+" : ""}${money(pf.earnings)}`} />
         <Kpi label="Budget" value={pf.budget ? money(pf.budget) : "—"} />
       </div>
 
       {/* Budget */}
       <div className="section-title">Budget</div>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
-        {!pf.budget ? (
+        {!pf.budget || editingBudget ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
-              <label>Starting budget (EGP)</label>
-              <input type="number" step="any" value={initBudget} onChange={(e) => setInitBudget(e.target.value)} />
+              <label>Budget (EGP)</label>
+              <input type="number" step="any" autoFocus
+                value={editingBudget ? budgetInput : (budgetInput || "")}
+                onChange={(e) => setBudgetInput(e.target.value)} />
             </div>
-            <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy} onClick={setStartBudget}>
-              Set budget
-            </button>
+            <button className="primary" style={{ width: "auto", padding: "11px 18px" }}
+              disabled={busy} onClick={() => saveBudget(budgetInput)}>Save</button>
+            {pf.budget > 0 && (
+              <button className="ghost" disabled={busy} onClick={() => setEditingBudget(false)}>Cancel</button>
+            )}
           </div>
         ) : (
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <div style={{ fontSize: 26, fontWeight: 800 }}>{money(pf.budget)} <small style={{ color: "var(--muted)", fontSize: 13 }}>EGP</small></div>
             <div style={{ flex: 1 }} />
-            <label style={{ color: "var(--muted)", fontSize: 13 }}>Step</label>
-            <input type="number" value={step} onChange={(e) => setStep(parseFloat(e.target.value) || 0)}
-              style={{ width: 100, background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 8, padding: "8px 10px" }} />
-            <button className="ghost" disabled={busy} onClick={() => changeBudget(-step)}>− {money(step)}</button>
-            <button className="ghost" disabled={busy} onClick={() => changeBudget(step)}>+ {money(step)}</button>
+            <button className="ghost" disabled={busy}
+              onClick={() => { setBudgetInput(String(pf.budget)); setEditingBudget(true); }}>Edit</button>
           </div>
         )}
       </div>
@@ -205,11 +211,14 @@ export default function Portfolio() {
           </div>
           <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy}>Add</button>
         </form>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+        <p style={{ color: "var(--muted)", fontSize: 12, margin: "10px 0 0" }}>
+          Buying a stock you already own <b>averages in</b> (updates your average buy price).
+        </p>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
           <button className="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>Import CSV</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onCsv} style={{ display: "none" }} />
           <a className="link" href={TEMPLATE} download="portfolio_template.csv">Download template</a>
-          <span style={{ color: "var(--muted)", fontSize: 12 }}>CSV columns: ticker, buy_price, quantity</span>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>CSV: ticker, buy_price, quantity</span>
         </div>
       </div>
 
@@ -219,8 +228,8 @@ export default function Portfolio() {
         <table className="responsive">
           <thead>
             <tr>
-              <th>Stock</th><th>Signal</th><th>Success</th><th className="num">Buy</th>
-              <th className="num">Now</th><th className="num">P/L</th><th>Alert</th><th></th>
+              <th>Stock</th><th>Signal</th><th className="num">Bought at</th><th className="num">Now</th>
+              <th className="num">Target sell</th><th className="num">P/L</th><th>Alert</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -231,11 +240,10 @@ export default function Portfolio() {
               <tr key={h.id} style={{ cursor: "default" }}>
                 <td className="tickercell" data-label="Stock">
                   <Link to={`/stocks/${h.ticker}`}>{h.ticker.replace(".EGX", "")}</Link>
-                  <small>{h.name} · {h.quantity} sh</small>
+                  <small>{h.name} · {h.quantity} sh{h.sold_qty > 0 ? ` · sold ${h.sold_qty}@${money(h.avg_sell_price)}` : ""}</small>
                 </td>
                 <td data-label="Signal">{h.signal ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span> : "—"}</td>
-                <td data-label="Success" className="prob"><b>{prob(h.success_prob)}</b></td>
-                <td className="num" data-label="Buy">
+                <td className="num" data-label="Bought at">
                   {editId === h.id ? (
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <input type="number" step="any" title="Buy price" style={editInput}
@@ -246,6 +254,7 @@ export default function Portfolio() {
                   ) : money(h.buy_price)}
                 </td>
                 <td className="num" data-label="Now">{money(h.current_price)}</td>
+                <td className="num up" data-label="Target sell">{money(h.target_price)}</td>
                 <td className={`num ${pnlCls(h.pnl)}`} data-label="P/L">
                   {h.pnl == null ? "—" : `${h.pnl >= 0 ? "+" : ""}${money(h.pnl)}`}
                   {h.pnl_pct != null && <small style={{ display: "block", color: "var(--muted)" }}>{signed(h.pnl_pct)}</small>}
@@ -258,12 +267,11 @@ export default function Portfolio() {
                       <button className="ghost" disabled={busy} onClick={() => setEditId(null)}>Cancel</button>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", gap: 6 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button className="ghost" disabled={busy} onClick={() => startEdit(h)}>Edit</button>
-                      <button className="ghost" disabled={busy} onClick={() => sell(h)}
-                        style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>
-                        Sell
-                      </button>
+                      <button className="ghost" disabled={busy} onClick={() => openSell(h)}
+                        style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>Sell</button>
+                      <button className="ghost" disabled={busy} onClick={() => removeHolding(h)} style={{ color: "var(--muted)" }}>Remove</button>
                     </div>
                   )}
                 </td>
@@ -273,18 +281,23 @@ export default function Portfolio() {
         </table>
       </div>
 
-      {/* Performance chart */}
+      {/* Performance */}
       {pf.holdings.length > 0 && (
         <>
           <div className="section-title">Performance</div>
           <div className="card" style={{ padding: 16, marginBottom: 18 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
               {RANGES.map((r) => (
                 <button key={r.days} className="ghost" onClick={() => setRange(r.days)}
                   style={range === r.days ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}>
                   {r.label}
                 </button>
               ))}
+              <div style={{ flex: 1 }} />
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>Open earnings:&nbsp;
+                <b className={pnlCls(pf.pnl)}>{`${pf.pnl >= 0 ? "+" : ""}${money(pf.pnl)}`}</b>
+                {pf.realized_pnl ? <> · Realized: <b className={pnlCls(pf.realized_pnl)}>{`${pf.realized_pnl >= 0 ? "+" : ""}${money(pf.realized_pnl)}`}</b></> : null}
+              </span>
             </div>
             {hist && hist.series.length > 1 ? (
               <ResponsiveContainer width="100%" height={280}>
@@ -295,19 +308,20 @@ export default function Portfolio() {
                   <Tooltip contentStyle={{ background: "#161c28", border: "1px solid #232c3d", borderRadius: 8 }} />
                   <Line type="monotone" dataKey="value" name="Value" stroke="#3ddc97" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="invested" name="Cost basis" stroke="#8a97ad" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                  <Line type="monotone" dataKey="profit" name="Earnings" stroke="#4aa8ff" strokeWidth={1.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
               <p style={{ color: "var(--muted)", margin: 0 }}>Not enough price history for this range yet.</p>
             )}
             <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
-              Current holdings valued over time (green) vs. what you paid (dashed). End-of-day data.
+              Value (green) vs. what you paid (dashed) vs. earnings (blue). End-of-day data.
             </p>
           </div>
         </>
       )}
 
-      {/* Auto allocation */}
+      {/* Allocation */}
       <div className="section-title">Suggested allocation</div>
       <div className="card" style={{ padding: 16 }}>
         {!pf.budget ? (
@@ -322,10 +336,7 @@ export default function Portfolio() {
             <div style={{ overflowX: "auto" }}>
               <table className="responsive">
                 <thead>
-                  <tr>
-                    <th>Stock</th><th>Signal</th><th>Success</th>
-                    <th className="num">Allocate</th><th className="num">Shares</th><th className="num">Entry</th>
-                  </tr>
+                  <tr><th>Stock</th><th>Signal</th><th>Success</th><th className="num">Allocate</th><th className="num">Shares</th><th className="num">Entry</th></tr>
                 </thead>
                 <tbody>
                   {alloc.allocations.map((a) => (
@@ -345,9 +356,36 @@ export default function Portfolio() {
         )}
       </div>
 
+      {/* Sell modal */}
+      {sellFor && (
+        <div onClick={() => setSellFor(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", zIndex: 50, padding: 16 }}>
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ padding: 20, width: "100%", maxWidth: 420 }}>
+            <h3 style={{ marginTop: 0 }}>Sell {sellFor.ticker.replace(".EGX", "")}</h3>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
+              You hold {sellFor.quantity} shares (avg buy {money(sellFor.buy_price)}).
+            </p>
+            <div className="field"><label>Sell price</label>
+              <input type="number" step="any" value={sellForm.sell_price}
+                onChange={(e) => setSellForm({ ...sellForm, sell_price: e.target.value })} /></div>
+            <div className="field"><label>Units (max {sellFor.quantity})</label>
+              <input type="number" step="any" value={sellForm.units}
+                onChange={(e) => setSellForm({ ...sellForm, units: e.target.value })} /></div>
+            <p style={{ color: "var(--muted)", fontSize: 12 }}>
+              Selling all units closes the position. A partial sell reduces it and updates your
+              average sell price.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button className="ghost" disabled={busy} onClick={() => setSellFor(null)}>Cancel</button>
+              <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy} onClick={confirmSell}>Confirm sell</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <p className="disclaimer">
-        P/L and signals use the latest end-of-day data. Allocation is a diversified suggestion
-        weighted by success rate — <b>not financial advice</b>. You decide and execute every trade.
+        P/L, earnings and signals use the latest end-of-day data. Allocation is a diversified
+        suggestion weighted by success rate — <b>not financial advice</b>.
       </p>
     </div>
   );
