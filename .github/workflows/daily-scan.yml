@@ -4,7 +4,9 @@ name: Daily EGX scan
 # trading day before the EGX open (10:00 Cairo). Sun-Thu only.
 on:
   schedule:
-    - cron: "30 6 * * 0-4" # 06:30 UTC ~ 08:30/09:30 Cairo, before the 10:00 open
+    # 01:00 UTC = 04:00 Cairo (summer, UTC+3) / 03:00 Cairo (winter, UTC+2), Sun-Thu.
+    # GitHub cron is UTC-only and does not follow DST; this lands at ~3-4am local.
+    - cron: "0 1 * * 0-4"
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 jobs:
