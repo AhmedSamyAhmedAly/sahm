@@ -5,7 +5,7 @@ export default function Legal() {
     <div className="container" style={{ maxWidth: 820 }}>
       <Link to="/" className="link">← Back</Link>
       <h1 style={{ marginTop: 12 }}>Terms &amp; Privacy</h1>
-      <p style={{ color: "var(--muted)" }}>Saaed (صاعد) — last updated June 2026.</p>
+      <p style={{ color: "var(--muted)" }}>Saaed — last updated June 2026.</p>
 
       <div className="card" style={{ padding: 20, marginTop: 16, lineHeight: 1.7 }}>
         <h2>Terms &amp; Conditions</h2>
