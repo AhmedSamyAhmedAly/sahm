@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import require_admin
 from app.models import BacktestStat, ModelVersion, Outcome, Recommendation, User
 from app.schemas import BacktestStatOut, ModelMetricOut, TrackRecordResponse
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api", tags=["track-record"])
 
 
 @router.get("/track-record", response_model=TrackRecordResponse)
-def track_record(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def track_record(db: Session = Depends(get_db), user: User = Depends(require_admin)):
     # Backtested stats, ordered by band then target.
     bt_rows = db.execute(
         select(BacktestStat).order_by(
