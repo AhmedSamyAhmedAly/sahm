@@ -10,7 +10,7 @@ __pycache__/
 venv/
 *.db
 *.sqlite3
-uvicorn*.log
+*.log
 
 # --- node / frontend ---
 node_modules/
