@@ -39,6 +39,7 @@ a { color: var(--blue); text-decoration: none; }
 .nav a.link.active, .nav a.link:hover { color: var(--text); }
 .nav .spacer { flex: 1; }
 .container { max-width: 1180px; margin: 0 auto; padding: 20px; }
+.container.wide { max-width: 1500px; }   /* homepage table needs room for all columns */
 
 /* kpi cards */
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
@@ -106,6 +107,8 @@ button.ghost { background: transparent; color: var(--muted); border: 1px solid v
 .switch a { cursor: pointer; }
 
 .disclaimer { color: var(--muted); font-size: 12px; margin-top: 18px; line-height: 1.5; }
+.footer { display: flex; align-items: center; gap: 16px; max-width: 1180px; margin: 28px auto 24px; padding: 16px 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+.footer .spacer { flex: 1; }
 .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 22px 0 10px; }
 .pill { display:inline-block; padding:2px 8px; border-radius:6px; background:var(--card-2); color:var(--muted); font-size:12px; }
 

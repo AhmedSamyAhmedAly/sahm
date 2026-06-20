@@ -63,7 +63,7 @@ export default function Dashboard() {
   const winRate = track?.live_win_rate;
 
   return (
-    <div className="container">
+    <div className="container wide">
       <div className="kpis">
         <Kpi label="Stocks scanned" value={data.active_count} />
         <Kpi label="Strong buys today" value={strongBuys} />
@@ -71,7 +71,7 @@ export default function Dashboard() {
           label="Live win rate"
           value={winRate == null ? "—" : `${Math.round(winRate * 100)}%`}
         />
-        <Kpi label="Data date" value={data.date || "—"} />
+        <Kpi label="Last update" value={data.date || "—"} />
       </div>
 
       <div className="card">
@@ -85,6 +85,8 @@ export default function Dashboard() {
             <option value="strong_buy">Strong buy</option>
             <option value="buy">Buy</option>
             <option value="hold">Hold</option>
+            <option value="sell">Sell</option>
+            <option value="strong_sell">Strong sell</option>
           </select>
           <select value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="score">Sort: Score</option>
@@ -102,11 +104,12 @@ export default function Dashboard() {
                 <th>Signal</th>
                 <th>News</th>
                 <th>Score</th>
-                <th>Success %</th>
+                <th>Success</th>
+                <th>Goal</th>
                 <th className="num">Entry</th>
                 <th className="num">Target</th>
                 <th className="num">Stop</th>
-                <th className="num hide-sm">R:R</th>
+                <th className="num hide-sm" title="Risk : Reward — potential gain vs. potential loss. Higher is better.">R:R</th>
                 <th className="num hide-sm">Hold</th>
               </tr>
             </thead>
@@ -128,11 +131,12 @@ export default function Dashboard() {
                     </div>
                     <small style={{ color: "var(--muted)" }}>{p.score}</small>
                   </td>
-                  <td className="prob" data-label="Success %">
-                    <b>{prob(p.success_prob)}</b>{" "}
-                    <small>
-                      →+{Math.round((p.target_pct || 0) * 100)}% / {p.horizon_days}d
-                      {p.success_n ? ` · n=${p.success_n}` : ""}
+                  <td className="prob" data-label="Success">
+                    <b>{prob(p.success_prob)}</b>
+                  </td>
+                  <td data-label="Goal">
+                    <small style={{ color: "var(--muted)" }}>
+                      +{Math.round((p.target_pct || 0) * 100)}% / {p.horizon_days}d
                     </small>
                   </td>
                   <td className="num" data-label="Entry">{money(p.entry_price)}</td>

@@ -1,10 +1,11 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import StockDetail from "./pages/StockDetail.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import Admin from "./pages/Admin.jsx";
+import Legal from "./pages/Legal.jsx";
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -80,8 +81,22 @@ export default function App() {
             </Protected>
           }
         />
+        <Route path="/terms" element={<Legal />} />
+        <Route path="/privacy" element={<Legal />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer />
     </>
+  );
+}
+
+function Footer() {
+  return (
+    <div className="footer">
+      <span>صاعد Saaed · educational tool, not financial advice</span>
+      <span className="spacer" />
+      <Link to="/terms" className="link">Terms</Link>
+      <Link to="/privacy" className="link">Privacy</Link>
+    </div>
   );
 }
