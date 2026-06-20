@@ -1,4 +1,6 @@
-# سهم Sahm — EGX Stock Signals
+# صاعد Saaed — EGX Stock Signals
+
+> Formerly "Sahm". The codebase package/folder is still `sahm`; the product name is **Saaed**.
 
 A shared web dashboard that scans the **Egyptian Exchange (EGX)** every trading day and ranks the
 stocks with the strongest setups — each shown with an **honest, backtested success rate** and a clear

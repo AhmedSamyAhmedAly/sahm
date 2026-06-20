@@ -12,7 +12,7 @@ function Nav() {
   return (
     <div className="nav">
       <div className="brand">
-        سهم <span>Sahm</span>
+        صاعد <span>Saaed</span>
       </div>
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
         Dashboard

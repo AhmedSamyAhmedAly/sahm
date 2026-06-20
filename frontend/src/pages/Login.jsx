@@ -36,7 +36,7 @@ export default function Login() {
     <div className="auth-wrap">
       <div className="auth-card">
         <h1>
-          سهم <span style={{ color: "var(--accent)" }}>Sahm</span>
+          صاعد <span style={{ color: "var(--accent)" }}>Saaed</span>
         </h1>
         <p className="sub">EGX signals with honest, backtested success rates.</p>
 

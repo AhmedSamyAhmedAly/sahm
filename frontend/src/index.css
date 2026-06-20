@@ -122,3 +122,74 @@ button.ghost { background: transparent; color: var(--muted); border: 1px solid v
   .detail-grid { grid-template-columns: 1fr; }
   .hide-sm { display: none; }
 }
+
+/* ---------- Mobile (phones) ---------- */
+@media (max-width: 680px) {
+  .container { padding: 14px 12px; }
+
+  /* Nav: wrap, shrink brand, drop the email pill */
+  .nav { gap: 12px 14px; padding: 10px 14px; flex-wrap: wrap; }
+  .brand { font-size: 18px; }
+  .nav a.link { font-size: 13px; }
+  .nav .pill { display: none; }
+  .nav .spacer { flex-basis: 100%; height: 0; }
+
+  .kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  .kpi { padding: 12px; }
+  .kpi .value { font-size: 20px; }
+
+  /* Toolbar: full-width controls */
+  .toolbar { padding: 12px; }
+  .toolbar input, .toolbar select { flex: 1 1 100%; font-size: 16px; } /* 16px avoids iOS zoom */
+
+  /* Bigger touch targets */
+  button.ghost { padding: 10px 14px; }
+
+  .levels { grid-template-columns: 1fr; }
+
+  /* --- Turn .responsive tables into cards --- */
+  table.responsive thead { display: none; }
+  table.responsive,
+  table.responsive tbody,
+  table.responsive tr,
+  table.responsive td { display: block; width: 100%; }
+  table.responsive tr {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin: 0 0 12px;
+    padding: 6px 14px;
+  }
+  table.responsive td {
+    border: none;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    white-space: normal;
+    text-align: right;
+  }
+  table.responsive td:last-child { border-bottom: none; }
+  table.responsive td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    text-align: left;
+    flex: 0 0 auto;
+  }
+  /* The stock cell becomes the card header */
+  table.responsive td.tickercell {
+    font-size: 16px;
+    padding-top: 6px;
+  }
+  table.responsive td.tickercell::before { content: ""; }
+  table.responsive td.tickercell small { text-align: right; }
+  table.responsive .scorebar { width: 120px; }
+  /* keep R:R / Hold visible inside the card even though hidden in the wide table */
+  table.responsive td.hide-sm { display: flex; }
+}

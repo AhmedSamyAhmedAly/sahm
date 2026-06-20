@@ -98,7 +98,7 @@ export default function Admin() {
 
       <div className="section-title">Users</div>
       <div className="card" style={{ overflowX: "auto" }}>
-        <table>
+        <table className="responsive">
           <thead>
             <tr>
               <th>Email</th><th>Role</th><th>Status</th><th>Created</th>
@@ -108,17 +108,17 @@ export default function Admin() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id} style={{ cursor: "default" }}>
-                <td className="tickercell">{u.email}</td>
-                <td>
+                <td className="tickercell" data-label="Email">{u.email}</td>
+                <td data-label="Role">
                   <span className={`badge ${isAdminAcct(u) ? "strong_buy" : "buy"}`}>
                     {u.role.toUpperCase()}
                   </span>
                 </td>
-                <td>{u.is_active ? <span className="up">active</span> : <span className="down">suspended</span>}</td>
-                <td>{fmt(u.created_at)}</td>
-                <td>{fmt(u.last_login_at)}</td>
-                <td className="num">{u.watchlist_count}</td>
-                <td>
+                <td data-label="Status">{u.is_active ? <span className="up">active</span> : <span className="down">suspended</span>}</td>
+                <td data-label="Created">{fmt(u.created_at)}</td>
+                <td data-label="Last login">{fmt(u.last_login_at)}</td>
+                <td className="num" data-label="Watchlist">{u.watchlist_count}</td>
+                <td data-label="Actions">
                   {isAdminAcct(u) ? (
                     <span className="pill">protected</span>
                   ) : (

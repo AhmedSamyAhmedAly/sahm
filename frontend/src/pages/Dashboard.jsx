@@ -94,7 +94,7 @@ export default function Dashboard() {
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <table>
+          <table className="responsive">
             <thead>
               <tr>
                 <th>#</th>
@@ -113,33 +113,33 @@ export default function Dashboard() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
-                  <td className="num">{p.rank}</td>
-                  <td className="tickercell">
+                  <td className="num" data-label="#">{p.rank}</td>
+                  <td className="tickercell" data-label="Stock">
                     {p.ticker.replace(".EGX", "")}
                     <small>{p.name}</small>
                   </td>
-                  <td>
+                  <td data-label="Signal">
                     <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>
                   </td>
-                  <td><NewsChip p={p} /></td>
-                  <td>
+                  <td data-label="News"><NewsChip p={p} /></td>
+                  <td data-label="Score">
                     <div className="scorebar">
                       <i style={{ width: `${p.score}%` }} />
                     </div>
                     <small style={{ color: "var(--muted)" }}>{p.score}</small>
                   </td>
-                  <td className="prob">
+                  <td className="prob" data-label="Success %">
                     <b>{prob(p.success_prob)}</b>{" "}
                     <small>
                       →+{Math.round((p.target_pct || 0) * 100)}% / {p.horizon_days}d
                       {p.success_n ? ` · n=${p.success_n}` : ""}
                     </small>
                   </td>
-                  <td className="num">{money(p.entry_price)}</td>
-                  <td className="num up">{money(p.target_price)}</td>
-                  <td className="num down">{money(p.stop_loss)}</td>
-                  <td className="num hide-sm">{p.risk_reward ?? "—"}</td>
-                  <td className="num hide-sm">
+                  <td className="num" data-label="Entry">{money(p.entry_price)}</td>
+                  <td className="num up" data-label="Target">{money(p.target_price)}</td>
+                  <td className="num down" data-label="Stop">{money(p.stop_loss)}</td>
+                  <td className="num hide-sm" data-label="R:R">{p.risk_reward ?? "—"}</td>
+                  <td className="num hide-sm" data-label="Hold">
                     {p.expected_hold_days ? `~${Math.round(p.expected_hold_days)}d` : "—"}
                   </td>
                 </tr>
