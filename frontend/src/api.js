@@ -47,6 +47,8 @@ export const api = {
   watch: (ticker, on) =>
     request(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: on ? "POST" : "DELETE" }),
 
+  assets: () => request("/api/assets"),
+
   // ---- portfolio ----
   portfolio: () => request("/api/portfolio"),
   addHolding: (ticker, buy_price, quantity) =>

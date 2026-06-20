@@ -91,7 +91,7 @@ export default function StockDetail() {
               </div>
               <div style={{ marginTop: 14, display: "flex", justifyContent: "space-between" }}>
                 <div><div className="l" style={{ color: "var(--muted)", fontSize: 12 }}>Success rate</div>
-                  <div className="prob"><b style={{ fontSize: 20 }}>{prob(p.success_prob)}</b> <small>(n={p.success_n ?? "—"})</small></div>
+                  <div className="prob"><b style={{ fontSize: 20 }}>{prob(p.success_prob)}</b></div>
                 </div>
                 <div style={{ textAlign: "right" }}><div className="l" style={{ color: "var(--muted)", fontSize: 12 }}>Risk / Reward</div>
                   <div style={{ fontSize: 20, fontWeight: 800 }}>{p.risk_reward ?? "—"}</div>

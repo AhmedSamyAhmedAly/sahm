@@ -14,20 +14,32 @@ function Kpi({ label, value, cls }) {
 
 export default function Portfolio() {
   const [pf, setPf] = useState(null);
+  const [assets, setAssets] = useState([]);
+  const [alloc, setAlloc] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "" });
-  const [budget, setBudget] = useState("");
-  const [alloc, setAlloc] = useState(null);
+  const [initBudget, setInitBudget] = useState("");
+  const [step, setStep] = useState(1000);
 
-  const load = () =>
-    api.portfolio().then((d) => { setPf(d); if (d.budget) setBudget(d.budget); })
-      .catch((e) => setErr(e.message));
-  useEffect(load, []);
+  const load = async () => {
+    const d = await api.portfolio();
+    setPf(d);
+    if (d.budget > 0) {
+      try { setAlloc(await api.allocate(d.budget)); } catch { setAlloc(null); }
+    } else {
+      setAlloc(null);
+    }
+  };
+
+  useEffect(() => {
+    load().catch((e) => setErr(e.message));
+    api.assets().then(setAssets).catch(() => {});
+  }, []);
 
   const wrap = async (fn) => {
     setErr(""); setBusy(true);
-    try { await fn(); load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
   const addHolding = (e) => {
@@ -37,20 +49,39 @@ export default function Portfolio() {
       setForm({ ticker: "", buy_price: "", quantity: "" });
     });
   };
-  const del = (h) => wrap(() => api.deleteHolding(h.id));
-  const saveBudget = () => wrap(() => api.setBudget(parseFloat(budget) || 0));
-  const suggest = () =>
-    wrap(async () => setAlloc(await api.allocate(parseFloat(budget) || undefined)));
+  const sell = (h) => {
+    if (window.confirm(`Sell (close) your ${h.ticker.replace(".EGX", "")} position?`))
+      wrap(() => api.deleteHolding(h.id));
+  };
+  const changeBudget = (delta) =>
+    wrap(() => api.setBudget(Math.max(0, (pf.budget || 0) + delta)));
+  const setStartBudget = () =>
+    wrap(() => api.setBudget(Math.max(0, parseFloat(initBudget) || 0)));
 
   if (err && !pf) return <div className="container"><div className="error">{err}</div></div>;
   if (!pf) return <div className="loading">Loading portfolio…</div>;
 
   const pnlCls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
+  const isNew = !pf.budget && pf.holdings.length === 0;
 
   return (
     <div className="container">
       <h2 style={{ marginTop: 0 }}>Portfolio</h2>
       {err && <div className="error">{err}</div>}
+
+      {isNew && (
+        <div className="card" style={{ padding: 18, marginBottom: 18, borderColor: "var(--accent)" }}>
+          <h3 style={{ marginTop: 0 }}>👋 Welcome to your Portfolio</h3>
+          <p style={{ color: "var(--muted)", marginBottom: 8 }}>Two quick steps to get started:</p>
+          <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
+            <li><b>Set your budget</b> below — the cash you want to invest.</li>
+            <li><b>Add stocks you already own</b> (ticker, buy price, quantity).</li>
+          </ol>
+          <p style={{ color: "var(--muted)", marginTop: 8, marginBottom: 0 }}>
+            We'll then suggest how to split your budget across the best signals.
+          </p>
+        </div>
+      )}
 
       <div className="kpis">
         <Kpi label="Invested" value={money(pf.invested)} />
@@ -59,20 +90,54 @@ export default function Portfolio() {
         <Kpi label="Budget" value={pf.budget ? money(pf.budget) : "—"} />
       </div>
 
+      {/* Budget */}
+      <div className="section-title">Budget</div>
+      <div className="card" style={{ padding: 16, marginBottom: 18 }}>
+        {!pf.budget ? (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
+              <label>Starting budget (EGP)</label>
+              <input type="number" step="any" value={initBudget} onChange={(e) => setInitBudget(e.target.value)} />
+            </div>
+            <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy} onClick={setStartBudget}>
+              Set budget
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{money(pf.budget)} <small style={{ color: "var(--muted)", fontSize: 13 }}>EGP</small></div>
+            <div style={{ flex: 1 }} />
+            <label style={{ color: "var(--muted)", fontSize: 13 }}>Step</label>
+            <input type="number" value={step} onChange={(e) => setStep(parseFloat(e.target.value) || 0)}
+              style={{ width: 100, background: "var(--bg)", border: "1px solid var(--border)", color: "var(--text)", borderRadius: 8, padding: "8px 10px" }} />
+            <button className="ghost" disabled={busy} onClick={() => changeBudget(-step)}>− {money(step)}</button>
+            <button className="ghost" disabled={busy} onClick={() => changeBudget(step)}>+ {money(step)}</button>
+          </div>
+        )}
+      </div>
+
       {/* Add holding */}
-      <div className="section-title">Add a stock you bought</div>
+      <div className="section-title">Add a stock you own</div>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
         <form onSubmit={addHolding} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 150px" }}>
-            <label>Ticker (e.g. COMI)</label>
-            <input required value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
+            <label>Stock</label>
+            <input list="tickers" required placeholder="Type or pick a ticker"
+              value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
+            <datalist id="tickers">
+              {assets.map((a) => (
+                <option key={a.ticker} value={a.ticker.replace(".EGX", "")}>
+                  {a.ticker.replace(".EGX", "")} — {a.name}
+                </option>
+              ))}
+            </datalist>
           </div>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 130px" }}>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 120px" }}>
             <label>Buy price</label>
             <input type="number" step="any" required value={form.buy_price} onChange={(e) => setForm({ ...form, buy_price: e.target.value })} />
           </div>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 130px" }}>
-            <label>Quantity (shares)</label>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 120px" }}>
+            <label>Quantity</label>
             <input type="number" step="any" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
           </div>
           <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy}>Add</button>
@@ -109,7 +174,10 @@ export default function Portfolio() {
                 </td>
                 <td data-label="Alert">{h.alert ? <span className={h.sell_suggested ? "down" : ""}>{h.sell_suggested ? "⚠ " : ""}{h.alert}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                 <td data-label="">
-                  <button className="ghost" disabled={busy} onClick={() => del(h)} style={{ color: "var(--red)", borderColor: "var(--red)" }}>Remove</button>
+                  <button className="ghost" disabled={busy} onClick={() => sell(h)}
+                    style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>
+                    Sell
+                  </button>
                 </td>
               </tr>
             ))}
@@ -117,23 +185,16 @@ export default function Portfolio() {
         </table>
       </div>
 
-      {/* Budget + allocation */}
-      <div className="section-title">Budget &amp; suggested allocation</div>
+      {/* Auto allocation */}
+      <div className="section-title">Suggested allocation</div>
       <div className="card" style={{ padding: 16 }}>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
-            <label>Budget (EGP)</label>
-            <input type="number" step="any" value={budget} onChange={(e) => setBudget(e.target.value)} />
-          </div>
-          <button className="ghost" disabled={busy} onClick={saveBudget}>Save budget</button>
-          <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy} onClick={suggest}>
-            Suggest allocation
-          </button>
-        </div>
-
-        {alloc && (
-          <div style={{ marginTop: 16 }}>
-            <p style={{ color: "var(--muted)", fontSize: 13 }}>
+        {!pf.budget ? (
+          <p style={{ color: "var(--muted)", margin: 0 }}>Set a budget above to see a suggested allocation.</p>
+        ) : !alloc || alloc.allocations.length === 0 ? (
+          <p style={{ color: "var(--muted)", margin: 0 }}>No buy candidates to allocate right now.</p>
+        ) : (
+          <>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
               {alloc.note} Leftover cash: <b>{money(alloc.leftover_cash)}</b> EGP.
             </p>
             <div style={{ overflowX: "auto" }}>
@@ -158,7 +219,7 @@ export default function Portfolio() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </>
         )}
       </div>
 
