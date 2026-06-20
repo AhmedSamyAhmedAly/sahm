@@ -159,7 +159,8 @@ export default function Admin() {
               <b>{m.title}</b>
               {m.resolved && <span className="pill" style={{ color: "var(--green)" }}>resolved</span>}
               <span style={{ color: "var(--muted)", fontSize: 12 }}>
-                {m.email}{m.created_at ? ` · ${new Date(m.created_at).toLocaleString()}` : ""}
+                {m.email}{m.contact ? ` · reply: ${m.contact}` : ""}
+                {m.created_at ? ` · ${new Date(m.created_at).toLocaleString()}` : ""}
               </span>
               <div style={{ flex: 1 }} />
               <button className="ghost" disabled={busy} onClick={() => resolveMsg(m)}>

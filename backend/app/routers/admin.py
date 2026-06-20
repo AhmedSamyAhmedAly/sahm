@@ -111,7 +111,7 @@ def list_messages(db: Session = Depends(get_db), _: User = Depends(require_admin
     ).scalars().all()
     return [
         ContactMessageOut(
-            id=m.id, email=m.email, title=m.title, description=m.description,
+            id=m.id, email=m.email, contact=m.contact, title=m.title, description=m.description,
             attachments=m.attachments or [], resolved=m.resolved, created_at=m.created_at,
         )
         for m in rows

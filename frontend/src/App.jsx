@@ -26,9 +26,11 @@ function Nav() {
       <NavLink to="/portfolio" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         Portfolio
       </NavLink>
-      <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
-        Track Record
-      </NavLink>
+      {user.role === "admin" && (
+        <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+          Track Record
+        </NavLink>
+      )}
       {user.role === "admin" && (
         <NavLink to="/admin" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
           Admin
@@ -94,7 +96,7 @@ export default function App() {
         <Route
           path="/track-record"
           element={
-            <Protected requireBudget>
+            <Protected adminOnly requireBudget>
               <TrackRecord />
             </Protected>
           }

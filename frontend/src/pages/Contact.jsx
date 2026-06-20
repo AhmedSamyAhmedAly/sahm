@@ -6,6 +6,7 @@ import { useAuth } from "../auth.jsx";
 export default function Contact() {
   const { user } = useAuth();
   const [title, setTitle] = useState("");
+  const [reply, setReply] = useState("");
   const [desc, setDesc] = useState("");
   const [files, setFiles] = useState([]); // [{name, type, data(base64)}]
   const [busy, setBusy] = useState(false);
@@ -28,8 +29,8 @@ export default function Contact() {
     if (!title.trim()) { setErr("Title is required"); return; }
     setErr(""); setBusy(true);
     try {
-      await api.contact(title, desc, files);
-      setDone(true); setTitle(""); setDesc(""); setFiles([]);
+      await api.contact(title, desc, reply, files);
+      setDone(true); setTitle(""); setReply(""); setDesc(""); setFiles([]);
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   };
 
@@ -53,6 +54,11 @@ export default function Contact() {
                   onChange={(e) => setTitle(e.target.value)} placeholder="Short summary" />
               </div>
               <div className="field">
+                <label>Email or mobile (so we can reply)</label>
+                <input value={reply} maxLength={256}
+                  onChange={(e) => setReply(e.target.value)} placeholder="you@example.com or 01x xxxx xxxx" />
+              </div>
+              <div className="field">
                 <label>Description</label>
                 <textarea value={desc} rows={5} onChange={(e) => setDesc(e.target.value)}
                   placeholder="Tell us what's going on…"
@@ -70,9 +76,6 @@ export default function Contact() {
               </div>
               <button className="primary" disabled={busy}>{busy ? "Sending…" : "Send message"}</button>
             </form>
-            <p className="disclaimer">
-              Or email us directly at <a href="mailto:ahmed.samy@sahm.app">ahmed.samy@sahm.app</a>.
-            </p>
           </>
         )}
       </div>

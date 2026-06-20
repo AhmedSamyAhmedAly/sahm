@@ -41,7 +41,7 @@ export default function PicksView({
   const [q, setQ] = useState("");
   const [signal, setSignal] = useState("");
   const [sort, setSort] = useState(suggestionsOnly ? "prob" : "score");
-  const [band] = useState(BANDS[0]);
+  const [band, setBand] = useState(BANDS[0]);
 
   useEffect(() => {
     api.picks({ limit: 400, target: band.target, horizon: band.horizon })
@@ -97,6 +97,11 @@ export default function PicksView({
           <span className="pill">{rows.length} shown</span>
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
+          {!minimal && (
+            <select value={band.key} onChange={(e) => setBand(BANDS.find((b) => b.key === e.target.value))}>
+              {BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+            </select>
+          )}
           {!minimal && (
             <select value={signal} onChange={(e) => setSignal(e.target.value)}>
               {suggestionsOnly ? (

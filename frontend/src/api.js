@@ -74,6 +74,6 @@ export const api = {
   resolveMessage: (id) => request(`/api/admin/messages/${id}/resolve`, { method: "POST" }),
 
   // ---- contact ----
-  contact: (title, description, attachments) =>
-    request("/api/contact", { method: "POST", body: { title, description, attachments } }),
+  contact: (title, description, reply, attachments) =>
+    request("/api/contact", { method: "POST", body: { title, description, contact: reply, attachments } }),
 };

@@ -27,8 +27,8 @@ def submit_contact(req: ContactIn, db: Session = Depends(get_db),
             raise HTTPException(status_code=400, detail="Each attachment must be under ~1MB")
         atts.append({"name": a.get("name"), "type": a.get("type"), "data": data})
     db.add(ContactMessage(
-        user_id=user.id, email=user.email, title=req.title[:256],
-        description=req.description, attachments=atts,
+        user_id=user.id, email=user.email, contact=(req.contact or None),
+        title=req.title[:256], description=req.description, attachments=atts,
     ))
     db.commit()
     return {"ok": True}

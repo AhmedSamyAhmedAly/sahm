@@ -108,12 +108,14 @@ class SellIn(BaseModel):
 class ContactIn(BaseModel):
     title: str
     description: str | None = None
+    contact: str | None = None     # email or mobile to reply to
     attachments: list[dict] = []   # [{name, type, data(base64)}]
 
 
 class ContactMessageOut(BaseModel):
     id: int
     email: str | None = None
+    contact: str | None = None
     title: str
     description: str | None = None
     attachments: list[dict] = []

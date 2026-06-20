@@ -76,7 +76,8 @@ class ContactMessage(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    email: Mapped[str | None] = mapped_column(String(256))
+    email: Mapped[str | None] = mapped_column(String(256))   # account email
+    contact: Mapped[str | None] = mapped_column(String(256))  # reply-to email or mobile
     title: Mapped[str] = mapped_column(String(256))
     description: Mapped[str | None] = mapped_column(Text)
     attachments: Mapped[list | None] = mapped_column(JSON)  # [{name,type,data(base64)}]
