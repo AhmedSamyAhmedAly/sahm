@@ -28,6 +28,7 @@ def _is_the_admin(email: str) -> bool:
 def _to_out(u: User, watch_count: int) -> AdminUserOut:
     return AdminUserOut(
         id=u.id, email=u.email, role=u.role, is_active=u.is_active,
+        is_primary=_is_the_admin(u.email),
         created_at=u.created_at, last_login_at=u.last_login_at,
         watchlist_count=watch_count,
     )
@@ -69,19 +70,20 @@ def update_user(user_id: int, req: UpdateUserRequest, db: Session = Depends(get_
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     is_self = user.id == admin.id
-    is_admin_acct = _is_the_admin(user.email)
+    is_primary = _is_the_admin(user.email)
 
     if req.role is not None:
-        # Only the configured admin email may hold admin; reject promoting others.
-        if req.role == "admin" and not is_admin_acct:
-            raise HTTPException(status_code=400, detail="Only the configured admin email can be admin")
-        if is_admin_acct and req.role != "admin":
-            raise HTTPException(status_code=400, detail="Cannot demote the admin account")
-        user.role = role_for_email(user.email)  # always reconcile to the truth
+        if req.role not in ("admin", "member"):
+            raise HTTPException(status_code=400, detail="Role must be admin or member")
+        if req.role != "admin" and is_primary:
+            raise HTTPException(status_code=400, detail="Cannot demote the primary admin")
+        if req.role != "admin" and is_self:
+            raise HTTPException(status_code=400, detail="Cannot demote yourself")
+        user.role = req.role
 
     if req.is_active is not None:
-        if not req.is_active and (is_self or is_admin_acct):
-            raise HTTPException(status_code=400, detail="Cannot suspend the admin account")
+        if not req.is_active and (is_self or is_primary):
+            raise HTTPException(status_code=400, detail="Cannot suspend this account")
         user.is_active = req.is_active
 
     if req.password is not None:

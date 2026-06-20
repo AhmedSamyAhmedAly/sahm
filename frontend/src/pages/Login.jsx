@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
+import Logo from "../components/Logo.jsx";
 
 export default function Login() {
   const { user, login, register } = useAuth();
@@ -35,9 +36,7 @@ export default function Login() {
   return (
     <div className="auth-wrap">
       <div className="auth-card">
-        <h1>
-          صاعد <span style={{ color: "var(--accent)" }}>Saaed</span>
-        </h1>
+        <h1><Logo /></h1>
         <p className="sub">EGX signals with honest, backtested success rates.</p>
 
         {err && <div className="error">{err}</div>}

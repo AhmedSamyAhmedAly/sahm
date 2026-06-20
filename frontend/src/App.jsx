@@ -6,18 +6,22 @@ import StockDetail from "./pages/StockDetail.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import Admin from "./pages/Admin.jsx";
 import Portfolio from "./pages/Portfolio.jsx";
+import AllStocks from "./pages/AllStocks.jsx";
 import Legal from "./pages/Legal.jsx";
+import Contact from "./pages/Contact.jsx";
+import Logo from "./components/Logo.jsx";
 
 function Nav() {
   const { user, logout } = useAuth();
   if (!user) return null;
   return (
     <div className="nav">
-      <div className="brand">
-        صاعد <span>Saaed</span>
-      </div>
+      <div className="brand"><Logo /></div>
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
-        Dashboard
+        Suggestions
+      </NavLink>
+      <NavLink to="/market" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+        All Stocks
       </NavLink>
       <NavLink to="/portfolio" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         Portfolio
@@ -80,6 +84,14 @@ export default function App() {
           }
         />
         <Route
+          path="/market"
+          element={
+            <Protected requireBudget>
+              <AllStocks />
+            </Protected>
+          }
+        />
+        <Route
           path="/track-record"
           element={
             <Protected requireBudget>
@@ -97,6 +109,7 @@ export default function App() {
         />
         <Route path="/terms" element={<Legal />} />
         <Route path="/privacy" element={<Legal />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />
@@ -107,8 +120,9 @@ export default function App() {
 function Footer() {
   return (
     <div className="footer">
-      <span>صاعد Saaed · educational tool, not financial advice</span>
+      <span>Saaed · educational tool, not financial advice</span>
       <span className="spacer" />
+      <Link to="/contact" className="link">Contact</Link>
       <Link to="/terms" className="link">Terms</Link>
       <Link to="/privacy" className="link">Privacy</Link>
     </div>

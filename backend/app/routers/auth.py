@@ -46,8 +46,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account suspended — contact the admin")
 
-    # Reconcile role with the configured admin email on every login.
-    user.role = role_for_email(user.email)
+    # The primary admin is always admin; other users keep their stored role.
+    if user.email.lower() == settings.admin_email.lower():
+        user.role = "admin"
     user.last_login_at = _utcnow()
     db.commit()
     token = create_token(user.id, user.email, user.role)

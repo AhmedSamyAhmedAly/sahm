@@ -60,18 +60,6 @@ export default function Legal() {
           <li>A login token is kept in your browser's local storage to keep you signed in.</li>
         </ul>
 
-        <h3>Third parties</h3>
-        <p>
-          To run the service we use: <b>EODHD</b> (market data), <b>OpenAI</b> (news sentiment
-          summaries), and <b>Vercel</b> / <b>Neon</b> (hosting &amp; database). Public company
-          headlines come from public news sources. We do <b>not</b> sell your personal data.
-        </p>
-
-        <h3>Your data</h3>
-        <p>
-          You can ask the admin to export or delete your account and its data at any time.
-        </p>
-
         <p className="disclaimer" style={{ marginTop: 20 }}>
           By using Saaed you acknowledge that you have read and understood the above, and that all
           content is provided as <b>suggestions that may be inaccurate</b> — not financial advice.

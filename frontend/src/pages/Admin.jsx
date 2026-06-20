@@ -52,6 +52,8 @@ export default function Admin() {
   };
   const toggleActive = (u) =>
     wrap(() => api.adminUpdateUser(u.id, { is_active: !u.is_active }));
+  const toggleRole = (u) =>
+    wrap(() => api.adminUpdateUser(u.id, { role: u.role === "admin" ? "member" : "admin" }));
   const del = (u) => {
     if (window.confirm(`Delete ${u.email}? This cannot be undone.`))
       wrap(() => api.adminDeleteUser(u.id));
@@ -119,11 +121,19 @@ export default function Admin() {
                 <td data-label="Last login">{fmt(u.last_login_at)}</td>
                 <td className="num" data-label="Watchlist">{u.watchlist_count}</td>
                 <td data-label="Actions">
-                  {isAdminAcct(u) ? (
-                    <span className="pill">protected</span>
+                  {u.is_primary ? (
+                    <span className="pill">primary admin</span>
+                  ) : u.email === user?.email ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <button className="ghost" disabled={busy} onClick={() => resetPw(u)}>Reset PW</button>
+                      <span className="pill">you</span>
+                    </div>
                   ) : (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button className="ghost" disabled={busy} onClick={() => resetPw(u)}>Reset PW</button>
+                      <button className="ghost" disabled={busy} onClick={() => toggleRole(u)}>
+                        {u.role === "admin" ? "Remove admin" : "Make admin"}
+                      </button>
                       <button className="ghost" disabled={busy} onClick={() => toggleActive(u)}>
                         {u.is_active ? "Suspend" : "Activate"}
                       </button>

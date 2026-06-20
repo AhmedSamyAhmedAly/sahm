@@ -24,6 +24,7 @@ class AdminUserOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    is_primary: bool = False   # the protected bootstrap admin (ADMIN_EMAIL)
     created_at: dt.datetime | None = None
     last_login_at: dt.datetime | None = None
     watchlist_count: int = 0

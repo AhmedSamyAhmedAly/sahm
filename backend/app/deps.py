@@ -5,7 +5,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.auth import decode_token, role_for_email
+from app.auth import decode_token
+from app.config import settings
 from app.database import get_db
 from app.models import User
 
@@ -31,10 +32,10 @@ def get_current_user(
         raise cred_exc
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account suspended")
-    # Keep role in sync with the configured admin email (single source of truth).
-    expected = role_for_email(user.email)
-    if user.role != expected:
-        user.role = expected
+    # Guarantee the primary admin is always admin; never auto-demote others
+    # (other admins are managed explicitly in the admin panel).
+    if user.email.lower() == settings.admin_email.lower() and user.role != "admin":
+        user.role = "admin"
         db.commit()
     return user
 
