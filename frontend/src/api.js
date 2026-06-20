@@ -51,6 +51,7 @@ export const api = {
 
   // ---- portfolio ----
   portfolio: () => request("/api/portfolio"),
+  portfolioHistory: (days) => request(`/api/portfolio/history?days=${days}`),
   addHolding: (ticker, buy_price, quantity) =>
     request("/api/portfolio/holdings", { method: "POST", body: { ticker, buy_price, quantity } }),
   updateHolding: (id, patch) =>

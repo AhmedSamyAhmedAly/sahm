@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
       .me()
       .then((r) => {
         setToken(r.access_token);
-        setUser({ email: r.email, role: r.role });
+        setUser({ email: r.email, role: r.role, budget: r.budget });
       })
       .catch(() => setToken(null))
       .finally(() => setLoading(false));
@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
 
   const finish = (r) => {
     setToken(r.access_token);
-    setUser({ email: r.email, role: r.role });
+    setUser({ email: r.email, role: r.role, budget: r.budget });
     return r;
   };
 
@@ -33,6 +33,7 @@ export function AuthProvider({ children }) {
     loading,
     login: (email, password) => api.login(email, password).then(finish),
     register: (email, password, code) => api.register(email, password, code).then(finish),
+    setUserBudget: (budget) => setUser((u) => (u ? { ...u, budget } : u)),
     logout: () => {
       setToken(null);
       setUser(null);

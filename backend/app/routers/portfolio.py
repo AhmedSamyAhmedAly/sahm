@@ -2,9 +2,11 @@
 budget allocator. All read against the latest end-of-day data."""
 from __future__ import annotations
 
+import datetime as dt
 import math
+from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -101,6 +103,47 @@ def get_portfolio(db: Session = Depends(get_db), user: User = Depends(get_curren
         pnl=round(pnl, 2), pnl_pct=(round(pnl / invested * 100, 2) if invested else None),
         holdings=out,
     )
+
+
+@router.get("/history")
+def history(db: Session = Depends(get_db), user: User = Depends(get_current_user),
+            days: int = Query(90, description="lookback window; 0 = all available")):
+    """Current holdings valued over time vs. cost basis, over a date range."""
+    holdings = db.execute(
+        select(Holding).where(Holding.user_id == user.id)
+    ).scalars().all()
+    if not holdings:
+        return {"series": [], "invested": 0}
+
+    qty = defaultdict(float)
+    invested = 0.0
+    for h in holdings:
+        qty[h.ticker] += float(h.quantity)
+        invested += float(h.buy_price) * float(h.quantity)
+    tickers = list(qty.keys())
+
+    data_date = db.execute(select(func.max(DailyBar.date))).scalar()
+    if data_date is None:
+        return {"series": [], "invested": round(invested, 2)}
+    start = None if days <= 0 else (data_date - dt.timedelta(days=days))
+
+    q = select(DailyBar.date, DailyBar.ticker, DailyBar.close).where(DailyBar.ticker.in_(tickers))
+    if start is not None:
+        q = q.where(DailyBar.date >= start)
+    q = q.order_by(DailyBar.date)
+
+    by_date: dict = defaultdict(dict)
+    for d, t, c in db.execute(q).all():
+        if c is not None:
+            by_date[d][t] = float(c)
+
+    last: dict = {}
+    series = []
+    for d in sorted(by_date):
+        last.update(by_date[d])
+        value = sum(last.get(t, 0.0) * qty[t] for t in tickers)
+        series.append({"date": str(d), "value": round(value, 2), "invested": round(invested, 2)})
+    return {"series": series, "invested": round(invested, 2)}
 
 
 @router.post("/holdings", response_model=HoldingOut)

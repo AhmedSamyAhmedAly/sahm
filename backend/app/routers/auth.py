@@ -34,7 +34,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     token = create_token(user.id, user.email, user.role)
-    return TokenResponse(access_token=token, email=user.email, role=user.role)
+    return TokenResponse(access_token=token, email=user.email, role=user.role, budget=user.budget)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -51,14 +51,14 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     user.last_login_at = _utcnow()
     db.commit()
     token = create_token(user.id, user.email, user.role)
-    return TokenResponse(access_token=token, email=user.email, role=user.role)
+    return TokenResponse(access_token=token, email=user.email, role=user.role, budget=user.budget)
 
 
 @router.get("/me", response_model=TokenResponse)
 def me(user: User = Depends(get_current_user)):
     # Re-issue a fresh token alongside identity (handy for the SPA).
     token = create_token(user.id, user.email, user.role)
-    return TokenResponse(access_token=token, email=user.email, role=user.role)
+    return TokenResponse(access_token=token, email=user.email, role=user.role, budget=user.budget)
 
 
 def _utcnow() -> dt.datetime:

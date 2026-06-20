@@ -129,6 +129,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     email: str
     role: str
+    budget: float | None = None   # so the SPA can gate on "budget set"
 
 
 # ---- picks / stocks ----

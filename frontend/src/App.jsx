@@ -39,11 +39,13 @@ function Nav() {
   );
 }
 
-function Protected({ children, adminOnly = false }) {
+function Protected({ children, adminOnly = false, requireBudget = false }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
+  // Budget is mandatory: until it's set, everything routes to Portfolio.
+  if (requireBudget && !user.budget) return <Navigate to="/portfolio" replace />;
   return children;
 }
 
@@ -56,7 +58,7 @@ export default function App() {
         <Route
           path="/"
           element={
-            <Protected>
+            <Protected requireBudget>
               <Dashboard />
             </Protected>
           }
@@ -64,7 +66,7 @@ export default function App() {
         <Route
           path="/stocks/:ticker"
           element={
-            <Protected>
+            <Protected requireBudget>
               <StockDetail />
             </Protected>
           }
@@ -80,7 +82,7 @@ export default function App() {
         <Route
           path="/track-record"
           element={
-            <Protected>
+            <Protected requireBudget>
               <TrackRecord />
             </Protected>
           }
@@ -88,7 +90,7 @@ export default function App() {
         <Route
           path="/admin"
           element={
-            <Protected adminOnly>
+            <Protected adminOnly requireBudget>
               <Admin />
             </Protected>
           }

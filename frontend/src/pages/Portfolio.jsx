@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { api } from "../api.js";
+import { useAuth } from "../auth.jsx";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
+
+const RANGES = [
+  { label: "1M", days: 30 }, { label: "3M", days: 90 }, { label: "6M", days: 180 },
+  { label: "1Y", days: 365 }, { label: "All", days: 0 },
+];
 
 function Kpi({ label, value, cls }) {
   return (
@@ -13,9 +22,12 @@ function Kpi({ label, value, cls }) {
 }
 
 export default function Portfolio() {
+  const { setUserBudget } = useAuth();
   const [pf, setPf] = useState(null);
   const [assets, setAssets] = useState([]);
   const [alloc, setAlloc] = useState(null);
+  const [hist, setHist] = useState(null);
+  const [range, setRange] = useState(90);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "" });
@@ -41,6 +53,11 @@ export default function Portfolio() {
     api.assets().then(setAssets).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (pf && pf.holdings.length) api.portfolioHistory(range).then(setHist).catch(() => {});
+    else setHist(null);
+  }, [range, pf?.holdings.length]);
+
   const wrap = async (fn) => {
     setErr(""); setBusy(true);
     try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
@@ -57,10 +74,15 @@ export default function Portfolio() {
     if (window.confirm(`Sell (close) your ${h.ticker.replace(".EGX", "")} position?`))
       wrap(() => api.deleteHolding(h.id));
   };
-  const changeBudget = (delta) =>
-    wrap(() => api.setBudget(Math.max(0, (pf.budget || 0) + delta)));
-  const setStartBudget = () =>
-    wrap(() => api.setBudget(Math.max(0, parseFloat(initBudget) || 0)));
+  const changeBudget = (delta) => {
+    const nb = Math.max(0, (pf.budget || 0) + delta);
+    wrap(async () => { await api.setBudget(nb); setUserBudget(nb); });
+  };
+  const setStartBudget = () => {
+    const nb = Math.max(0, parseFloat(initBudget) || 0);
+    if (nb <= 0) { setErr("Enter a budget greater than 0"); return; }
+    wrap(async () => { await api.setBudget(nb); setUserBudget(nb); });
+  };
 
   const startEdit = (h) => { setEditId(h.id); setEditForm({ buy_price: h.buy_price, quantity: h.quantity }); };
   const saveEdit = (h) => wrap(async () => {
@@ -250,6 +272,40 @@ export default function Portfolio() {
           </tbody>
         </table>
       </div>
+
+      {/* Performance chart */}
+      {pf.holdings.length > 0 && (
+        <>
+          <div className="section-title">Performance</div>
+          <div className="card" style={{ padding: 16, marginBottom: 18 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              {RANGES.map((r) => (
+                <button key={r.days} className="ghost" onClick={() => setRange(r.days)}
+                  style={range === r.days ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            {hist && hist.series.length > 1 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={hist.series} margin={{ top: 6, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke="#232c3d" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill: "#8a97ad", fontSize: 11 }} minTickGap={40} />
+                  <YAxis tick={{ fill: "#8a97ad", fontSize: 11 }} width={64} domain={["auto", "auto"]} />
+                  <Tooltip contentStyle={{ background: "#161c28", border: "1px solid #232c3d", borderRadius: 8 }} />
+                  <Line type="monotone" dataKey="value" name="Value" stroke="#3ddc97" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="invested" name="Cost basis" stroke="#8a97ad" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p style={{ color: "var(--muted)", margin: 0 }}>Not enough price history for this range yet.</p>
+            )}
+            <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
+              Current holdings valued over time (green) vs. what you paid (dashed). End-of-day data.
+            </p>
+          </div>
+        </>
+      )}
 
       {/* Auto allocation */}
       <div className="section-title">Suggested allocation</div>
