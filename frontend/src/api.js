@@ -53,6 +53,10 @@ export const api = {
   portfolio: () => request("/api/portfolio"),
   addHolding: (ticker, buy_price, quantity) =>
     request("/api/portfolio/holdings", { method: "POST", body: { ticker, buy_price, quantity } }),
+  updateHolding: (id, patch) =>
+    request(`/api/portfolio/holdings/${id}`, { method: "PATCH", body: patch }),
+  importHoldings: (items) =>
+    request("/api/portfolio/holdings/bulk", { method: "POST", body: { items } }),
   deleteHolding: (id) => request(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
   setBudget: (budget) => request("/api/portfolio/budget", { method: "PUT", body: { budget } }),
   allocate: (budget) => request("/api/portfolio/allocate", { method: "POST", body: { budget } }),

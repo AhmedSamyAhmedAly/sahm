@@ -13,11 +13,16 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models import Asset, DailyBar, Holding, Recommendation, User
 from app.schemas import (
-    AllocationItem, AllocationResponse, BudgetIn, HoldingIn, HoldingOut,
-    PortfolioResponse,
+    AllocationItem, AllocationResponse, BudgetIn, BulkHoldingsIn, BulkResult,
+    HoldingIn, HoldingOut, HoldingUpdate, PortfolioResponse,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+
+
+def _norm_ticker(t: str) -> str:
+    t = t.strip().upper()
+    return t if "." in t else f"{t}.{settings.egx_exchange}"
 
 
 def _latest_closes(db: Session) -> tuple[dict, object]:
@@ -101,9 +106,7 @@ def get_portfolio(db: Session = Depends(get_db), user: User = Depends(get_curren
 @router.post("/holdings", response_model=HoldingOut)
 def add_holding(req: HoldingIn, db: Session = Depends(get_db),
                 user: User = Depends(get_current_user)):
-    ticker = req.ticker.strip().upper()
-    if "." not in ticker:
-        ticker = f"{ticker}.{settings.egx_exchange}"
+    ticker = _norm_ticker(req.ticker)
     if req.buy_price <= 0 or req.quantity <= 0:
         raise HTTPException(status_code=400, detail="Buy price and quantity must be positive")
     h = Holding(user_id=user.id, ticker=ticker, buy_price=req.buy_price, quantity=req.quantity)
@@ -113,6 +116,45 @@ def add_holding(req: HoldingIn, db: Session = Depends(get_db),
     names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
     closes, _ = _latest_closes(db)
     return _enrich(h, names, closes, _latest_recs(db))
+
+
+@router.patch("/holdings/{holding_id}", response_model=HoldingOut)
+def update_holding(holding_id: int, req: HoldingUpdate, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    h = db.get(Holding, holding_id)
+    if h is None or h.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    if req.buy_price is not None:
+        if req.buy_price <= 0:
+            raise HTTPException(status_code=400, detail="Buy price must be positive")
+        h.buy_price = req.buy_price
+    if req.quantity is not None:
+        if req.quantity <= 0:
+            raise HTTPException(status_code=400, detail="Quantity must be positive")
+        h.quantity = req.quantity
+    db.commit()
+    db.refresh(h)
+    names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
+    closes, _ = _latest_closes(db)
+    return _enrich(h, names, closes, _latest_recs(db))
+
+
+@router.post("/holdings/bulk", response_model=BulkResult)
+def import_holdings(req: BulkHoldingsIn, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    added, errors = 0, []
+    for it in req.items:
+        try:
+            if it.buy_price <= 0 or it.quantity <= 0:
+                errors.append(f"{it.ticker}: price/quantity must be positive")
+                continue
+            db.add(Holding(user_id=user.id, ticker=_norm_ticker(it.ticker),
+                           buy_price=it.buy_price, quantity=it.quantity))
+            added += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{it.ticker}: {e}")
+    db.commit()
+    return BulkResult(added=added, skipped=len(req.items) - added, errors=errors[:10])
 
 
 @router.delete("/holdings/{holding_id}")

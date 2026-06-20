@@ -67,6 +67,21 @@ class HoldingOut(BaseModel):
     sell_suggested: bool = False
 
 
+class HoldingUpdate(BaseModel):
+    buy_price: float | None = None
+    quantity: float | None = None
+
+
+class BulkHoldingsIn(BaseModel):
+    items: list[HoldingIn]
+
+
+class BulkResult(BaseModel):
+    added: int
+    skipped: int
+    errors: list[str] = []
+
+
 class PortfolioResponse(BaseModel):
     budget: float | None = None
     invested: float = 0

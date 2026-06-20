@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
@@ -21,6 +21,10 @@ export default function Portfolio() {
   const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "" });
   const [initBudget, setInitBudget] = useState("");
   const [step, setStep] = useState(1000);
+  const [editId, setEditId] = useState(null);
+  const [editForm, setEditForm] = useState({ buy_price: "", quantity: "" });
+  const [msg, setMsg] = useState("");
+  const fileRef = useRef(null);
 
   const load = async () => {
     const d = await api.portfolio();
@@ -58,16 +62,53 @@ export default function Portfolio() {
   const setStartBudget = () =>
     wrap(() => api.setBudget(Math.max(0, parseFloat(initBudget) || 0)));
 
+  const startEdit = (h) => { setEditId(h.id); setEditForm({ buy_price: h.buy_price, quantity: h.quantity }); };
+  const saveEdit = (h) => wrap(async () => {
+    await api.updateHolding(h.id, {
+      buy_price: parseFloat(editForm.buy_price), quantity: parseFloat(editForm.quantity),
+    });
+    setEditId(null);
+  });
+
+  const onCsv = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const items = [];
+      String(reader.result).split(/\r?\n/).forEach((line) => {
+        const c = line.split(",").map((x) => x.trim());
+        if (c.length < 3 || !c[0] || /ticker/i.test(c[0])) return;
+        const price = parseFloat(c[1]), qty = parseFloat(c[2]);
+        if (isFinite(price) && isFinite(qty)) items.push({ ticker: c[0], buy_price: price, quantity: qty });
+      });
+      if (!items.length) { setErr("No valid rows. Expected: ticker,buy_price,quantity"); return; }
+      setMsg("");
+      wrap(async () => {
+        const r = await api.importHoldings(items);
+        setMsg(`Imported ${r.added}${r.skipped ? `, skipped ${r.skipped}` : ""}.` +
+          (r.errors?.length ? ` Issues: ${r.errors.join("; ")}` : ""));
+      });
+    };
+    reader.readAsText(file);
+  };
+  const TEMPLATE = "data:text/csv;charset=utf-8," +
+    encodeURIComponent("ticker,buy_price,quantity\nCOMI,120,50\nSWDY,45,100");
+
   if (err && !pf) return <div className="container"><div className="error">{err}</div></div>;
   if (!pf) return <div className="loading">Loading portfolio…</div>;
 
   const pnlCls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
   const isNew = !pf.budget && pf.holdings.length === 0;
+  const editInput = { width: 72, background: "var(--bg)", border: "1px solid var(--border)",
+    color: "var(--text)", borderRadius: 6, padding: "6px 8px" };
 
   return (
     <div className="container">
       <h2 style={{ marginTop: 0 }}>Portfolio</h2>
       {err && <div className="error">{err}</div>}
+      {msg && <div className="card" style={{ padding: "10px 14px", marginBottom: 12, color: "var(--accent)", fontSize: 14 }}>{msg}</div>}
 
       {isNew && (
         <div className="card" style={{ padding: 18, marginBottom: 18, borderColor: "var(--accent)" }}>
@@ -142,6 +183,12 @@ export default function Portfolio() {
           </div>
           <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy}>Add</button>
         </form>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
+          <button className="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>Import CSV</button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onCsv} style={{ display: "none" }} />
+          <a className="link" href={TEMPLATE} download="portfolio_template.csv">Download template</a>
+          <span style={{ color: "var(--muted)", fontSize: 12 }}>CSV columns: ticker, buy_price, quantity</span>
+        </div>
       </div>
 
       {/* Holdings */}
@@ -166,7 +213,16 @@ export default function Portfolio() {
                 </td>
                 <td data-label="Signal">{h.signal ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span> : "—"}</td>
                 <td data-label="Success" className="prob"><b>{prob(h.success_prob)}</b></td>
-                <td className="num" data-label="Buy">{money(h.buy_price)}</td>
+                <td className="num" data-label="Buy">
+                  {editId === h.id ? (
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      <input type="number" step="any" title="Buy price" style={editInput}
+                        value={editForm.buy_price} onChange={(e) => setEditForm({ ...editForm, buy_price: e.target.value })} />
+                      <input type="number" step="any" title="Quantity" style={editInput}
+                        value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })} />
+                    </div>
+                  ) : money(h.buy_price)}
+                </td>
                 <td className="num" data-label="Now">{money(h.current_price)}</td>
                 <td className={`num ${pnlCls(h.pnl)}`} data-label="P/L">
                   {h.pnl == null ? "—" : `${h.pnl >= 0 ? "+" : ""}${money(h.pnl)}`}
@@ -174,10 +230,20 @@ export default function Portfolio() {
                 </td>
                 <td data-label="Alert">{h.alert ? <span className={h.sell_suggested ? "down" : ""}>{h.sell_suggested ? "⚠ " : ""}{h.alert}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                 <td data-label="">
-                  <button className="ghost" disabled={busy} onClick={() => sell(h)}
-                    style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>
-                    Sell
-                  </button>
+                  {editId === h.id ? (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="ghost" disabled={busy} onClick={() => saveEdit(h)}>Save</button>
+                      <button className="ghost" disabled={busy} onClick={() => setEditId(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="ghost" disabled={busy} onClick={() => startEdit(h)}>Edit</button>
+                      <button className="ghost" disabled={busy} onClick={() => sell(h)}
+                        style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>
+                        Sell
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
