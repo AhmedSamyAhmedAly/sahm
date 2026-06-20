@@ -24,6 +24,13 @@ function NewsChip({ p }) {
   );
 }
 
+const BANDS = [
+  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
+  { key: "t5_h10", label: "Target: +5% in 10d", target: 0.05, horizon: 10 },
+  { key: "t15_h20", label: "Target: +15% in 20d", target: 0.15, horizon: 20 },
+  { key: "t20_h20", label: "Target: +20% in 20d", target: 0.2, horizon: 20 },
+];
+
 export default function Dashboard() {
   const nav = useNavigate();
   const [data, setData] = useState(null);
@@ -32,9 +39,15 @@ export default function Dashboard() {
   const [q, setQ] = useState("");
   const [signal, setSignal] = useState("");
   const [sort, setSort] = useState("score");
+  const [band, setBand] = useState(BANDS[0]);
 
   useEffect(() => {
-    api.picks({ limit: 300 }).then(setData).catch((e) => setErr(e.message));
+    setData(null);
+    api.picks({ limit: 300, target: band.target, horizon: band.horizon })
+      .then(setData).catch((e) => setErr(e.message));
+  }, [band]);
+
+  useEffect(() => {
     api.trackRecord().then(setTrack).catch(() => {});
   }, []);
 
@@ -80,6 +93,11 @@ export default function Dashboard() {
           <span className="pill">{rows.length} shown</span>
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select value={band.key} onChange={(e) => setBand(BANDS.find((b) => b.key === e.target.value))}>
+            {BANDS.map((b) => (
+              <option key={b.key} value={b.key}>{b.label}</option>
+            ))}
+          </select>
           <select value={signal} onChange={(e) => setSignal(e.target.value)}>
             <option value="">All signals</option>
             <option value="strong_buy">Strong buy</option>

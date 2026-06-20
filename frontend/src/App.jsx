@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import StockDetail from "./pages/StockDetail.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import Admin from "./pages/Admin.jsx";
+import Portfolio from "./pages/Portfolio.jsx";
 import Legal from "./pages/Legal.jsx";
 
 function Nav() {
@@ -17,6 +18,9 @@ function Nav() {
       </div>
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
         Dashboard
+      </NavLink>
+      <NavLink to="/portfolio" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+        Portfolio
       </NavLink>
       <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         Track Record
@@ -62,6 +66,14 @@ export default function App() {
           element={
             <Protected>
               <StockDetail />
+            </Protected>
+          }
+        />
+        <Route
+          path="/portfolio"
+          element={
+            <Protected>
+              <Portfolio />
             </Protected>
           }
         />

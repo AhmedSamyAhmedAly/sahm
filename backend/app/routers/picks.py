@@ -1,40 +1,60 @@
 """Picks: the ranked daily recommendations that power the dashboard."""
 from __future__ import annotations
 
-import datetime as dt
-
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, nullslast, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Asset, Recommendation, WatchlistItem
+from app.models import Asset, Recommendation, User, WatchlistItem
 from app.schemas import PickOut, PicksResponse
-from app.models import User
 
 router = APIRouter(prefix="/api", tags=["picks"])
 
 
-def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool) -> PickOut:
+def band_override(rec: Recommendation, target: float | None, horizon: int | None) -> dict | None:
+    """Recompute a pick's band-dependent fields for a chosen target/horizon."""
+    if target is None or horizon is None or not rec.band_probs:
+        return None
+    key = f"t{int(round(target * 100))}_h{horizon}"
+    bp = rec.band_probs.get(key)
+    if not bp:
+        return None
+    entry = float(rec.entry_price) if rec.entry_price is not None else None
+    stop = float(rec.stop_loss) if rec.stop_loss is not None else None
+    tp = round(entry * (1 + target), 4) if entry else None
+    rr = round((tp - entry) / (entry - stop), 2) if (entry and stop and entry > stop) else None
+    return {
+        "success_prob": bp.get("prob"), "success_n": bp.get("n"),
+        "signal": bp.get("signal") or rec.signal,
+        "target_pct": target, "horizon_days": horizon,
+        "expected_hold": bp.get("hold"), "target_price": tp, "risk_reward": rr,
+    }
+
+
+def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool,
+             ov: dict | None = None) -> PickOut:
     feats = rec.features or {}
+    ov = ov or {}
     return PickOut(
         rank=rank,
         ticker=rec.ticker,
         name=asset.name if asset else None,
         sector=asset.sector if asset else None,
-        signal=rec.signal,
+        signal=ov.get("signal", rec.signal),
         score=rec.score,
-        success_prob=rec.success_prob,
-        success_n=rec.success_n,
-        target_pct=rec.target_pct,
-        horizon_days=rec.horizon_days,
+        success_prob=ov.get("success_prob", rec.success_prob),
+        success_n=ov.get("success_n", rec.success_n),
+        target_pct=ov.get("target_pct", rec.target_pct),
+        horizon_days=ov.get("horizon_days", rec.horizon_days),
         entry_price=float(rec.entry_price) if rec.entry_price is not None else None,
-        target_price=float(rec.target_price) if rec.target_price is not None else None,
+        target_price=ov.get("target_price",
+                            float(rec.target_price) if rec.target_price is not None else None),
         stop_loss=float(rec.stop_loss) if rec.stop_loss is not None else None,
-        risk_reward=feats.get("risk_reward"),
-        expected_hold_days=rec.expected_hold_days,
+        risk_reward=ov.get("risk_reward", feats.get("risk_reward")),
+        expected_hold_days=ov.get("expected_hold", rec.expected_hold_days),
         reasons=rec.reasons or [],
         watched=watched,
         news_sentiment=rec.news_sentiment,
@@ -48,9 +68,11 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None, watched: bool)
 def get_picks(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    signal: str | None = Query(None, description="filter: strong_buy|buy|hold|sell|strong_sell"),
+    signal: str | None = Query(None, description="filter on the effective signal"),
     sector: str | None = None,
     min_score: float = 0.0,
+    target: float | None = Query(None, description="target band, e.g. 0.10"),
+    horizon: int | None = Query(None, description="horizon days for the band, e.g. 10"),
     limit: int = 200,
 ):
     latest_date = db.execute(select(func.max(Recommendation.date))).scalar()
@@ -68,32 +90,33 @@ def get_picks(
         .join(Asset, Asset.ticker == Recommendation.ticker, isouter=True)
         .where(Recommendation.date == latest_date, Recommendation.score >= min_score)
     )
-    if signal:
-        q = q.where(Recommendation.signal == signal)
     if sector:
         q = q.where(Asset.sector == sector)
-    # Rank by calibrated success probability first (NULLs sort last in SQLite/PG
-    # under DESC), then by the rule score as a tiebreak.
-    q = q.order_by(
-        nullslast(Recommendation.success_prob.desc()), Recommendation.score.desc()
-    ).limit(limit)
+    rows = db.execute(q).all()
 
     watched = {
         t for (t,) in db.execute(
             select(WatchlistItem.ticker).where(WatchlistItem.user_id == user.id)
         ).all()
     }
-    rows = db.execute(q).all()
-    # Light, honest re-rank: nudge by news sentiment without touching success_prob.
+
+    # Apply the chosen band, filter on the effective signal, then rank by the
+    # effective success probability (with a light news nudge).
     w = settings.news_weight
-    rows = sorted(
-        rows,
-        key=lambda r: (r[0].success_prob or 0.0) + w * (r[0].news_sentiment or 0.0),
-        reverse=True,
-    )
+    items = []
+    for rec, asset in rows:
+        ov = band_override(rec, target, horizon)
+        eff_signal = (ov or {}).get("signal", rec.signal)
+        if signal and eff_signal != signal:
+            continue
+        eff_prob = ((ov or {}).get("success_prob", rec.success_prob)) or 0.0
+        items.append((rec, asset, ov, eff_prob + w * (rec.news_sentiment or 0.0)))
+
+    items.sort(key=lambda x: x[3], reverse=True)
+    items = items[:limit]
     picks = [
-        _to_pick(i + 1, rec, asset, rec.ticker in watched)
-        for i, (rec, asset) in enumerate(rows)
+        _to_pick(i + 1, rec, asset, rec.ticker in watched, ov)
+        for i, (rec, asset, ov, _) in enumerate(items)
     ]
     return PicksResponse(
         date=latest_date, universe_size=universe, active_count=active, picks=picks

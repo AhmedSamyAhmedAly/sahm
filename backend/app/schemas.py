@@ -41,6 +41,63 @@ class UpdateUserRequest(BaseModel):
     password: str | None = None
 
 
+# ---- portfolio ----
+class HoldingIn(BaseModel):
+    ticker: str
+    buy_price: float
+    quantity: float
+
+
+class HoldingOut(BaseModel):
+    id: int
+    ticker: str
+    name: str | None = None
+    buy_price: float
+    quantity: float
+    invested: float
+    current_price: float | None = None
+    current_value: float | None = None
+    pnl: float | None = None
+    pnl_pct: float | None = None
+    signal: str | None = None
+    success_prob: float | None = None
+    target_price: float | None = None
+    stop_loss: float | None = None
+    alert: str | None = None          # e.g. "Signal turned sell", "Target reached"
+    sell_suggested: bool = False
+
+
+class PortfolioResponse(BaseModel):
+    budget: float | None = None
+    invested: float = 0
+    current_value: float = 0
+    pnl: float = 0
+    pnl_pct: float | None = None
+    holdings: list[HoldingOut] = []
+
+
+class BudgetIn(BaseModel):
+    budget: float
+
+
+class AllocationItem(BaseModel):
+    ticker: str
+    name: str | None = None
+    signal: str
+    success_prob: float | None = None
+    suggested_amount: float
+    shares: int
+    entry_price: float | None = None
+    target_price: float | None = None
+
+
+class AllocationResponse(BaseModel):
+    budget: float
+    leftover_cash: float
+    allocations: list[AllocationItem] = []
+    note: str
+
+
 class AdminStats(BaseModel):
     total_users: int
     active_users: int

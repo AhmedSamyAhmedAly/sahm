@@ -37,11 +37,30 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default="member")  # admin | member
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # suspended = can't log in
     last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    budget: Mapped[float | None] = mapped_column(Float)  # EGP available to allocate
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     watchlist: Mapped[list["WatchlistItem"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    holdings: Mapped[list["Holding"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class Holding(Base):
+    """A stock the user actually bought (their real portfolio)."""
+
+    __tablename__ = "holdings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    ticker: Mapped[str] = mapped_column(String(32), index=True)
+    buy_price: Mapped[float] = mapped_column(Numeric(18, 4))
+    quantity: Mapped[float] = mapped_column(Float)  # shares held
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
+
+    user: Mapped[User] = relationship(back_populates="holdings")
 
 
 class WatchlistItem(Base):
@@ -118,6 +137,9 @@ class Recommendation(Base):
     expected_hold_days: Mapped[float | None] = mapped_column(Float)
     reasons: Mapped[list | None] = mapped_column(JSON)  # list[str] explainability
     features: Mapped[dict | None] = mapped_column(JSON)  # snapshot used at call time
+    # Per-band ML results so the user can switch target/horizon at query time:
+    # { "t5_h10": {prob, n, signal, hold}, "t10_h10": {...}, ... }
+    band_probs: Mapped[dict | None] = mapped_column(JSON)
     # --- live news overlay (shortlist only; separate from success_prob) ---
     news_sentiment: Mapped[float | None] = mapped_column(Float)  # -1..1
     news_label: Mapped[str | None] = mapped_column(String(16))  # positive|neutral|negative

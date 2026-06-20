@@ -47,6 +47,14 @@ export const api = {
   watch: (ticker, on) =>
     request(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: on ? "POST" : "DELETE" }),
 
+  // ---- portfolio ----
+  portfolio: () => request("/api/portfolio"),
+  addHolding: (ticker, buy_price, quantity) =>
+    request("/api/portfolio/holdings", { method: "POST", body: { ticker, buy_price, quantity } }),
+  deleteHolding: (id) => request(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
+  setBudget: (budget) => request("/api/portfolio/budget", { method: "PUT", body: { budget } }),
+  allocate: (budget) => request("/api/portfolio/allocate", { method: "POST", body: { budget } }),
+
   // ---- admin ----
   adminStats: () => request("/api/admin/stats"),
   adminUsers: () => request("/api/admin/users"),

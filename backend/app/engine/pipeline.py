@@ -83,13 +83,31 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
             signal = sc["signal"]
         expected_hold = stat.avg_days_to_target if stat else None
 
+        # Compute every trained band so the user can switch target/horizon later.
+        band_probs = {}
+        for (t, h) in settings.target_bands:
+            st = bt.lookup(stats_map, sc["score"], t, h)
+            bp = bundle.prob(feats, t, h) if bundle.ready else None
+            if bp is not None:
+                bsig = ml_signal(bp, bundle.base_rate(t, h))
+                bn = bundle.test_n(t, h) or (st.n_samples if st else None)
+            else:
+                bp = st.hit_rate if st else None
+                bsig = sc["signal"]
+                bn = st.n_samples if st else None
+            band_probs[ml.band_key(t, h)] = {
+                "prob": bp, "n": bn, "signal": bsig,
+                "hold": (st.avg_days_to_target if st else None),
+                "target_pct": t, "horizon_days": h,
+            }
+
         db.add(Recommendation(
             date=scan_date, ticker=a.ticker, signal=signal, score=sc["score"],
             success_prob=success_prob, success_n=success_n,
             target_pct=primary_t, horizon_days=primary_h,
             entry_price=levels["entry_price"], target_price=levels["target_price"],
             stop_loss=levels["stop_loss"], expected_hold_days=expected_hold,
-            reasons=sc["reasons"],
+            reasons=sc["reasons"], band_probs=band_probs,
             features={**feats, "components": sc["components"],
                       "risk_reward": levels["risk_reward"]},
         ))

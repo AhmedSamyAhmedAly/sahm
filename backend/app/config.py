@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     news_weight: float = 0.03            # light re-rank weight within the shortlist
     news_langs: str = "ar,en"            # comma-separated
 
+    # --- portfolio budget allocator ---
+    alloc_top_n: int = 8                  # how many top picks to spread a budget across
+    alloc_max_position_pct: float = 0.25  # cap any single position at 25% (diversification)
+
     @property
     def news_lang_list(self) -> list[str]:
         return [s.strip() for s in self.news_langs.split(",") if s.strip()]
