@@ -260,7 +260,7 @@ export default function Portfolio() {
                 <td data-label="Signal">
                   {h.signal
                     ? <span className={`badge ${h.signal}`}>{HOLDING_SIGNAL_LABEL[h.signal] || SIGNAL_LABEL[h.signal]}</span>
-                    : <span className="pill">no actions</span>}
+                    : <span className="pill">no action</span>}
                 </td>
                 <td className="num" data-label="Bought">
                   {editId === h.id ? (
