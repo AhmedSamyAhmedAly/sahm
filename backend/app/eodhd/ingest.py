@@ -41,7 +41,31 @@ def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
             a.asset_type = atype or a.asset_type
             a.is_listed = True
 
-    # De-list anything no longer in the exchange list.
+    # Always-include extras: valid EGX securities EODHD leaves out of the symbol
+    # list but still serves via eod/fundamentals (verified per-ticker so we never
+    # add a non-existent code).
+    for ticker in settings.extra_ticker_list:
+        if ticker in seen:
+            continue
+        try:
+            gen = client.fundamentals(ticker).get("General") or {}
+        except Exception:
+            continue  # not a real symbol / plan lacks access
+        seen.add(ticker)
+        tickers.append(ticker)
+        atype = (gen.get("Type") or "common stock").lower()
+        a = existing.get(ticker)
+        if a is None:
+            db.add(Asset(
+                ticker=ticker, name=gen.get("Name"), asset_type=atype,
+                exchange=settings.egx_exchange, is_listed=True,
+            ))
+        else:
+            a.name = gen.get("Name") or a.name
+            a.asset_type = atype
+            a.is_listed = True
+
+    # De-list anything no longer in the exchange list (extras are in `seen`, so kept).
     for ticker, a in existing.items():
         if ticker not in seen:
             a.is_listed = False

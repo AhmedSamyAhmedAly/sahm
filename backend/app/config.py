@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     egx_exchange: str = "EGX"
     egx_top_n: int = 25
 
+    # EGX securities EODHD omits from the exchange-symbol-list but still serves via
+    # the eod/fundamentals endpoints. Comma-separated codes (e.g. "BIGP,FNAR").
+    extra_tickers: str = "BIGP,FNAR"
+
     # Liquidity filters for the tradable universe.
     min_history_days: int = 120          # need enough bars for indicators
     min_avg_value_traded: float = 200_000.0   # EGP/day, 20-day average
@@ -68,6 +72,15 @@ class Settings(BaseSettings):
     # --- portfolio budget allocator ---
     alloc_top_n: int = 8                  # how many top picks to spread a budget across
     alloc_max_position_pct: float = 0.25  # cap any single position at 25% (diversification)
+
+    @property
+    def extra_ticker_list(self) -> list[str]:
+        out = []
+        for s in self.extra_tickers.split(","):
+            s = s.strip().upper()
+            if s:
+                out.append(s if "." in s else f"{s}.{self.egx_exchange}")
+        return out
 
     @property
     def news_lang_list(self) -> list[str]:
