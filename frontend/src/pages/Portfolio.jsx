@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import NumberInput from "../components/NumberInput.jsx";
+import TickerSelect from "../components/TickerSelect.jsx";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
 
 // For stocks you already own, a buy signal means "add to the position".
@@ -26,6 +27,7 @@ function Kpi({ label, value, cls }) {
 export default function Portfolio() {
   const { setUserBudget } = useAuth();
   const [pf, setPf] = useState(null);
+  const [assets, setAssets] = useState([]);
   const [alloc, setAlloc] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,10 @@ export default function Portfolio() {
     else setAlloc(null);
   };
 
-  useEffect(() => { load().catch((e) => setErr(e.message)); }, []);
+  useEffect(() => {
+    load().catch((e) => setErr(e.message));
+    api.assets().then(setAssets).catch(() => {});
+  }, []);
 
   const wrap = async (fn) => {
     setErr(""); setBusy(true);
@@ -193,8 +198,8 @@ export default function Portfolio() {
         <form onSubmit={addHolding} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
             <label>Stock</label>
-            <input list="tickers" required placeholder="Type or pick a ticker"
-              value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
+            <TickerSelect assets={assets} required value={form.ticker}
+              onChange={(v) => setForm({ ...form, ticker: v })} />
           </div>
           <div className="field" style={{ marginBottom: 0, flex: "1 1 130px" }}>
             <label>Buy price</label>
@@ -223,7 +228,6 @@ export default function Portfolio() {
           <span style={{ color: "var(--muted)", fontSize: 12 }}>CSV: ticker, buy_price, quantity</span>
         </div>
       </div>
-      <TickerOptions />
 
       {/* Holdings */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "22px 0 10px" }}>
@@ -432,20 +436,5 @@ export default function Portfolio() {
         suggestion weighted by success rate — <b>not financial advice</b>.
       </p>
     </div>
-  );
-}
-
-// Fills the shared #tickers datalist used by the Add-holding input.
-function TickerOptions() {
-  const [assets, setAssets] = useState([]);
-  useEffect(() => { api.assets().then(setAssets).catch(() => {}); }, []);
-  return (
-    <datalist id="tickers">
-      {assets.map((a) => (
-        <option key={a.ticker} value={a.ticker.replace(".EGX", "")}>
-          {a.ticker.replace(".EGX", "")} — {a.name}
-        </option>
-      ))}
-    </datalist>
   );
 }

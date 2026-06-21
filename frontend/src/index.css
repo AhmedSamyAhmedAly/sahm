@@ -205,6 +205,28 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .legend .badge, .legend .pill { font-size: 10px; }
 .legend-sep { width: 1px; height: 16px; background: var(--border); }
 
+/* ---------- searchable ticker picker (mobile-friendly combobox) ---------- */
+.combo { position: relative; width: 100%; }
+.combo > input { width: 100%; }
+.combo-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  max-height: 260px; overflow-y: auto; padding: 4px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+  -webkit-overflow-scrolling: touch;
+}
+.combo-item {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left;
+  background: transparent; border: none; color: var(--text); cursor: pointer;
+  padding: 10px 10px; border-radius: 7px; font-size: 14px;
+}
+.combo-item:hover, .combo-item.active { background: var(--card-2); }
+.combo-item b { font-weight: 700; }
+.combo-item span {
+  color: var(--muted); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* ---------- profile menu (top-right avatar dropdown) ---------- */
 .profile-menu { position: relative; }
 .avatar-btn { background: transparent; border: none; padding: 0; cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
@@ -259,8 +281,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .toolbar { padding: 12px; }
   .toolbar input, .toolbar select { flex: 1 1 100%; font-size: 16px; } /* 16px avoids iOS zoom */
 
+  /* 16px on every text field avoids iOS auto-zoom on focus */
+  .field input, .numfield input, .combo input, .auth-card input,
+  input[type="number"], input[type="text"], input[type="email"], input[type="tel"] {
+    font-size: 16px;
+  }
+  .combo-item { padding: 12px 10px; }      /* bigger touch targets */
+
   /* Bigger touch targets */
-  button.ghost { padding: 10px 14px; }
+  button.ghost, .iconbtn { padding: 10px 14px; }
 
   .levels { grid-template-columns: 1fr; }
 

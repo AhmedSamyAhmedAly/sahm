@@ -3,6 +3,7 @@ import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { money } from "../format.js";
 import NumberInput from "./NumberInput.jsx";
+import TickerSelect from "./TickerSelect.jsx";
 
 const FEATURES = [
   { ic: "📈", t: "Daily Suggestions", d: "Every trading morning we scan the whole EGX and rank the strongest buy setups — each with an honest, backtested Success %." },
@@ -155,15 +156,8 @@ export default function Onboarding({ open, onClose, onDone }) {
             </p>
             <div className="field" style={{ marginBottom: 10 }}>
               <label>Stock</label>
-              <input list="onb-tickers" placeholder="Type or pick a ticker" value={form.ticker}
-                onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
-              <datalist id="onb-tickers">
-                {assets.map((a) => (
-                  <option key={a.ticker} value={a.ticker.replace(".EGX", "")}>
-                    {a.ticker.replace(".EGX", "")} — {a.name}
-                  </option>
-                ))}
-              </datalist>
+              <TickerSelect assets={assets} value={form.ticker}
+                onChange={(v) => setForm({ ...form, ticker: v })} />
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <div className="field" style={{ flex: "1 1 130px" }}>
