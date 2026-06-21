@@ -40,8 +40,8 @@ export default function PicksView({
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [signal, setSignal] = useState("");
-  const [sort, setSort] = useState(suggestionsOnly ? "prob" : "score");
-  const [dir, setDir] = useState("desc");
+  const [sort, setSort] = useState("rank");
+  const [dir, setDir] = useState("asc");
   const [band, setBand] = useState(BANDS[0]);
 
   useEffect(() => {
@@ -66,6 +66,7 @@ export default function PicksView({
       r = [...r].sort((a, b) => (a.name || a.ticker).localeCompare(b.name || b.ticker));
     } else {
       const cmp = (a, b) => {
+        if (sort === "rank") return (a.rank || 0) - (b.rank || 0);
         if (sort === "prob") return (a.success_prob || 0) - (b.success_prob || 0);
         if (sort === "rr") return (a.risk_reward || 0) - (b.risk_reward || 0);
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
@@ -127,6 +128,7 @@ export default function PicksView({
           )}
           {!minimal && (
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="rank">Sort: # (rank)</option>
               <option value="score">Sort: Score</option>
               <option value="prob">Sort: Success %</option>
               <option value="rr">Sort: Risk/Reward</option>
