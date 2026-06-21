@@ -29,22 +29,43 @@ export default function TrackRecord() {
   }
   const sortedBands = Object.keys(bands).sort((a, b) => parseInt(b) - parseInt(a));
 
+  const winPct = d.live_win_rate == null ? null : Math.round(d.live_win_rate * 100);
+
   return (
     <div className="container">
+      <h2 style={{ marginTop: 0 }}>Track Record</h2>
+      <div className="card" style={{ padding: 16, marginBottom: 18, borderColor: "var(--accent)" }}>
+        <p style={{ margin: 0, lineHeight: 1.6 }}>
+          <b>In plain English:</b> this page is our honesty check. {winPct == null ? (
+            <>Once enough of our past picks have played out, you'll see here how often they actually worked.</>
+          ) : (
+            <>Of the <b>{d.live_graded}</b> past picks that have fully played out, <b>{winPct}%</b> hit
+            their target — versus roughly <b>34%</b> if you'd picked at random. So the picks worked
+            noticeably more often than luck.</>
+          )} About half still miss, which is exactly why stops and spreading your money across
+          several picks matter. <b>No one can promise a winner.</b>
+        </p>
+      </div>
+
       <div className="kpis">
-        <div className="kpi"><div className="label">Live win rate</div><div className="value">{d.live_win_rate == null ? "—" : `${Math.round(d.live_win_rate * 100)}%`}</div></div>
-        <div className="kpi"><div className="label">Graded calls</div><div className="value">{d.live_graded}</div></div>
-        <div className="kpi"><div className="label">Avg return / call</div><div className="value">{d.live_avg_return == null ? "—" : signed(d.live_avg_return)}</div></div>
-        <div className="kpi"><div className="label">Backtest cells</div><div className="value">{d.backtest.length}</div></div>
+        <div className="kpi"><div className="label">How often picks won</div><div className="value">{winPct == null ? "—" : `${winPct}%`}</div></div>
+        <div className="kpi"><div className="label">Picks measured</div><div className="value">{d.live_graded}</div></div>
+        <div className="kpi"><div className="label">Avg return per pick</div><div className="value">{d.live_avg_return == null ? "—" : signed(d.live_avg_return)}</div></div>
+        <div className="kpi"><div className="label">Random would win</div><div className="value">~34%</div></div>
       </div>
 
       {d.models?.length > 0 && (
         <>
-          <div className="section-title">Model accuracy (out-of-sample, walk-forward)</div>
+          <div className="section-title">How accurate is the model?</div>
           <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
-            Honest validation on years of unseen history. <b>Lift</b> = how much more often the
-            model's top picks hit target vs. the market baseline. AUC ~0.5 = no skill, ~0.6 = a real
-            (modest) edge.
+            We tested the model on years of history it had never seen. The column that matters most is
+            <b> Lift</b> — how many times more often the model's top picks hit their target than a
+            random guess. <b>2× means twice as often as luck.</b>
+            <br />
+            <span style={{ fontSize: 12 }}>
+              (For the technical: <b>AUC</b> 0.5 = no skill, ~0.6 = a real but modest edge;
+              <b> Top-picks hit-rate</b> vs. <b>Baseline</b> is the model's success rate vs. the market average.)
+            </span>
           </p>
           <div className="card" style={{ overflowX: "auto", marginBottom: 18 }}>
             <table>
@@ -81,7 +102,7 @@ export default function TrackRecord() {
 
       {d.equity_curve.length > 0 && (
         <div className="card" style={{ padding: 16, marginBottom: 18 }}>
-          <div className="section-title" style={{ marginTop: 0 }}>Cumulative realized return (graded calls)</div>
+          <div className="section-title" style={{ marginTop: 0 }}>Adding up every pick's result over time</div>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={d.equity_curve} margin={{ top: 6, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#232c3d" vertical={false} />
@@ -94,10 +115,12 @@ export default function TrackRecord() {
         </div>
       )}
 
-      <div className="section-title">Backtested success rate by score band</div>
+      <div className="section-title">Do higher scores really do better?</div>
       <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
-        The honest numbers: across years of history, how often did stocks in each score band reach
-        the target within the horizon. Higher score bands should show higher hit-rates.
+        Every stock gets a <b>score from 0–100</b>. This table groups years of history by score and
+        shows how often each group hit the target. If the system works, <b>higher score rows should
+        have higher percentages</b> — and they do. Each cell is a different target (e.g. “+10% / 10d”
+        = gained 10% within 10 days).
       </p>
       <div className="card" style={{ overflowX: "auto" }}>
         <table>

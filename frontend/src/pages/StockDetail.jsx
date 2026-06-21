@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Area,
-  AreaChart,
   CartesianGrid,
-  ReferenceLine,
+  ComposedChart,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,21 +14,38 @@ import {
 import { api } from "../api.js";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
 
+const TIMEFRAMES = [
+  { label: "1D", days: 1 }, { label: "1W", days: 7 }, { label: "1M", days: 30 },
+  { label: "6M", days: 182 }, { label: "1Y", days: 365 },
+];
+
 export default function StockDetail() {
   const { ticker } = useParams();
   const nav = useNavigate();
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
+  const [tf, setTf] = useState(TIMEFRAMES[3]); // default 6M
 
   useEffect(() => {
     api.stock(ticker).then(setD).catch((e) => setErr(e.message));
   }, [ticker]);
 
+  const chart = useMemo(() => {
+    if (!d) return [];
+    const all = d.bars.map((b) => ({ date: b.date, open: b.open, close: b.close }));
+    if (!all.length) return all;
+    const last = new Date(all[all.length - 1].date);
+    const cutoff = new Date(last);
+    cutoff.setDate(cutoff.getDate() - tf.days);
+    const filtered = all.filter((b) => new Date(b.date) >= cutoff);
+    return filtered.length >= 2 ? filtered : all.slice(-2); // keep at least 2 points to draw
+  }, [d, tf]);
+
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!d) return <div className="loading">Loading {ticker}…</div>;
 
   const p = d.latest;
-  const chart = d.bars.map((b) => ({ date: b.date, close: b.close }));
+  const fewPoints = chart.length <= 3;
 
   return (
     <div className="container">
@@ -41,12 +59,21 @@ export default function StockDetail() {
 
       <div className="detail-grid">
         <div className="card" style={{ padding: 16 }}>
-          <div className="section-title" style={{ marginTop: 0 }}>Price (last {chart.length} days)</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <div className="section-title" style={{ margin: 0 }}>Price — open &amp; close</div>
+            <div style={{ flex: 1 }} />
+            {TIMEFRAMES.map((t) => (
+              <button key={t.label} className="iconbtn" onClick={() => setTf(t)}
+                style={tf.label === t.label ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
           <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={chart} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            <ComposedChart data={chart} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3ddc97" stopOpacity={0.4} />
+                  <stop offset="0%" stopColor="#3ddc97" stopOpacity={0.35} />
                   <stop offset="100%" stopColor="#3ddc97" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -57,9 +84,16 @@ export default function StockDetail() {
                 contentStyle={{ background: "#161c28", border: "1px solid #232c3d", borderRadius: 8 }}
                 labelStyle={{ color: "#8a97ad" }}
               />
-              <Area type="monotone" dataKey="close" stroke="#3ddc97" strokeWidth={2} fill="url(#g)" />
-            </AreaChart>
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Area type="monotone" dataKey="close" name="Close" stroke="#3ddc97" strokeWidth={2}
+                fill="url(#g)" dot={fewPoints} />
+              <Line type="monotone" dataKey="open" name="Open" stroke="#4aa8ff" strokeWidth={1.5}
+                strokeDasharray="4 3" dot={fewPoints} />
+            </ComposedChart>
           </ResponsiveContainer>
+          <p style={{ color: "var(--muted)", fontSize: 12, margin: "6px 0 0" }}>
+            End-of-day data — each point is one trading session’s open and close.
+          </p>
         </div>
 
         <div>

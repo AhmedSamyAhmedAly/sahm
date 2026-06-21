@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Asset, DailyBar, Holding, Recommendation, User
+from app.models import Asset, DailyBar, Holding, Recommendation, Sale, User
 from app.schemas import (
     AllocationItem, AllocationResponse, BudgetIn, BulkHoldingsIn, BulkResult,
-    HoldingIn, HoldingOut, HoldingUpdate, PortfolioResponse, SellIn,
+    HoldingIn, HoldingOut, HoldingUpdate, PortfolioResponse, SaleOut, SaleUpdate,
+    SellIn,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
@@ -105,6 +106,23 @@ def _add_or_average(db: Session, user_id: int, ticker: str, buy_price: float, qt
     return h
 
 
+def _recompute_realized(db: Session, h: Holding) -> None:
+    """Derive a holding's realized aggregates from its individual sale rows."""
+    rows = db.execute(select(Sale).where(Sale.holding_id == h.id)).scalars().all()
+    sold = sum(float(s.units) for s in rows)
+    h.sold_qty = sold
+    h.avg_sell_price = (
+        round(sum(float(s.sell_price) * float(s.units) for s in rows) / sold, 4)
+        if sold > 0 else None
+    )
+    h.realized_pnl = round(sum(float(s.gain) for s in rows), 4)
+
+
+def _credit_budget(user: User, amount: float) -> None:
+    """Move cash in/out of the user's liquid budget (never below 0)."""
+    user.budget = round(max(0.0, float(user.budget or 0.0) + amount), 2)
+
+
 @router.get("", response_model=PortfolioResponse)
 def get_portfolio(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     all_holdings = db.execute(
@@ -140,22 +158,93 @@ def sell_holding(holding_id: int, req: SellIn, db: Session = Depends(get_db),
     if units <= 0:
         raise HTTPException(status_code=400, detail="Nothing left to sell")
 
-    gain = (req.sell_price - float(h.buy_price)) * units
-    old_sold = float(h.sold_qty or 0)
-    old_avg = float(h.avg_sell_price or 0)
-    new_sold = old_sold + units
-    h.avg_sell_price = round((old_avg * old_sold + req.sell_price * units) / new_sold, 4)
-    h.sold_qty = new_sold
-    h.realized_pnl = float(h.realized_pnl or 0) + gain
+    buy = float(h.buy_price)
+    gain = (req.sell_price - buy) * units
+    db.add(Sale(user_id=user.id, holding_id=h.id, ticker=h.ticker, units=units,
+                sell_price=req.sell_price, buy_price=buy, gain=round(gain, 4)))
+    db.flush()
     h.quantity = float(h.quantity) - units
     if h.quantity <= 1e-9:
         h.quantity = 0
         h.closed = True
+    _recompute_realized(db, h)
+    _credit_budget(user, req.sell_price * units)  # proceeds return to liquid budget
     db.commit()
     db.refresh(h)
     names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
     closes, _ = _latest_closes(db)
     return _enrich(h, names, closes, _latest_recs(db))
+
+
+def _sale_out(s: Sale, names: dict) -> SaleOut:
+    return SaleOut(
+        id=s.id, holding_id=s.holding_id, ticker=s.ticker, name=names.get(s.ticker),
+        units=float(s.units), sell_price=float(s.sell_price), buy_price=float(s.buy_price),
+        gain=round(float(s.gain), 2), proceeds=round(float(s.sell_price) * float(s.units), 2),
+        created_at=s.created_at,
+    )
+
+
+@router.get("/sales", response_model=list[SaleOut])
+def list_sales(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.execute(
+        select(Sale).where(Sale.user_id == user.id).order_by(Sale.created_at.desc())
+    ).scalars().all()
+    names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
+    return [_sale_out(s, names) for s in rows]
+
+
+@router.patch("/sales/{sale_id}", response_model=SaleOut)
+def update_sale(sale_id: int, req: SaleUpdate, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    s = db.get(Sale, sale_id)
+    if s is None or s.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    h = db.get(Holding, s.holding_id)
+    if h is None:
+        raise HTTPException(status_code=404, detail="Holding not found")
+
+    new_units = float(req.units) if req.units is not None else float(s.units)
+    new_price = float(req.sell_price) if req.sell_price is not None else float(s.sell_price)
+    if new_units <= 0 or new_price <= 0:
+        raise HTTPException(status_code=400, detail="Sell price and units must be positive")
+    # You can't sell more than was ever held: remaining + this sale's old units.
+    max_units = float(h.quantity) + float(s.units)
+    if new_units > max_units + 1e-9:
+        raise HTTPException(status_code=400, detail=f"Can sell at most {round(max_units, 4)} units")
+
+    old_proceeds = float(s.sell_price) * float(s.units)
+    h.quantity = round(float(h.quantity) - (new_units - float(s.units)), 6)
+    s.units, s.sell_price = new_units, new_price
+    s.gain = round((new_price - float(s.buy_price)) * new_units, 4)
+    h.closed = h.quantity <= 1e-9
+    if h.closed:
+        h.quantity = 0
+    _recompute_realized(db, h)
+    _credit_budget(user, (new_price * new_units) - old_proceeds)
+    db.commit()
+    db.refresh(s)
+    return _sale_out(s, dict(db.execute(select(Asset.ticker, Asset.name)).all()))
+
+
+@router.delete("/sales/{sale_id}")
+def delete_sale(sale_id: int, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    s = db.get(Sale, sale_id)
+    if s is None or s.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    h = db.get(Holding, s.holding_id)
+    proceeds = float(s.sell_price) * float(s.units)
+    if h is not None:
+        h.quantity = round(float(h.quantity) + float(s.units), 6)
+        h.closed = False
+    db.delete(s)
+    db.flush()
+    if h is not None:
+        _recompute_realized(db, h)
+    _credit_budget(user, -proceeds)  # undo the proceeds that were credited
+    db.commit()
+    return {"deleted": sale_id}
 
 
 @router.get("/history")
@@ -207,6 +296,9 @@ def add_holding(req: HoldingIn, db: Session = Depends(get_db),
     if req.buy_price <= 0 or req.quantity <= 0:
         raise HTTPException(status_code=400, detail="Buy price and quantity must be positive")
     h = _add_or_average(db, user.id, ticker, req.buy_price, req.quantity)
+    if req.deduct:
+        _credit_budget(user, -(req.buy_price * req.quantity))  # cash spent leaves the budget
+        h.from_budget = True
     db.commit()
     db.refresh(h)
     names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
@@ -258,6 +350,10 @@ def delete_holding(holding_id: int, db: Session = Depends(get_db),
     h = db.get(Holding, holding_id)
     if h is None or h.user_id != user.id:
         raise HTTPException(status_code=404, detail="Holding not found")
+    # If it was bought from the budget, hand back the cost basis of what's still held
+    # (sold units already returned their cash as proceeds).
+    if h.from_budget:
+        _credit_budget(user, float(h.buy_price) * float(h.quantity))
     db.delete(h)
     db.commit()
     return {"deleted": holding_id}

@@ -41,6 +41,7 @@ export default function PicksView({
   const [q, setQ] = useState("");
   const [signal, setSignal] = useState("");
   const [sort, setSort] = useState(suggestionsOnly ? "prob" : "score");
+  const [dir, setDir] = useState("desc");
   const [band, setBand] = useState(BANDS[0]);
 
   useEffect(() => {
@@ -64,15 +65,17 @@ export default function PicksView({
     if (minimal) {
       r = [...r].sort((a, b) => (a.name || a.ticker).localeCompare(b.name || b.ticker));
     } else {
-      r = [...r].sort((a, b) => {
-        if (sort === "prob") return (b.success_prob || 0) - (a.success_prob || 0);
-        if (sort === "rr") return (b.risk_reward || 0) - (a.risk_reward || 0);
+      const cmp = (a, b) => {
+        if (sort === "prob") return (a.success_prob || 0) - (b.success_prob || 0);
+        if (sort === "rr") return (a.risk_reward || 0) - (b.risk_reward || 0);
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
-        return b.score - a.score;
-      });
+        return a.score - b.score;
+      };
+      const sign = dir === "asc" ? 1 : -1;
+      r = [...r].sort((a, b) => sign * cmp(a, b));
     }
     return r;
-  }, [data, q, signal, sort, suggestionsOnly, minimal]);
+  }, [data, q, signal, sort, dir, suggestionsOnly, minimal]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
@@ -129,6 +132,13 @@ export default function PicksView({
               <option value="rr">Sort: Risk/Reward</option>
               <option value="name">Sort: Stock name</option>
             </select>
+          )}
+          {!minimal && (
+            <button type="button" className="iconbtn" onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
+              title={dir === "desc" ? "Descending (high → low)" : "Ascending (low → high)"}
+              style={{ minWidth: 96 }}>
+              {dir === "desc" ? "↓ High–Low" : "↑ Low–High"}
+            </button>
           )}
         </div>
 

@@ -25,6 +25,9 @@ class AdminUserOut(BaseModel):
     role: str
     is_active: bool
     is_primary: bool = False   # the protected bootstrap admin (ADMIN_EMAIL)
+    first_name: str | None = None
+    last_name: str | None = None
+    mobile: str | None = None
     created_at: dt.datetime | None = None
     last_login_at: dt.datetime | None = None
 
@@ -33,6 +36,17 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str
     role: str = "member"
+    first_name: str | None = None
+    last_name: str | None = None
+    mobile: str | None = None
+
+
+class ProfileUpdate(BaseModel):
+    email: EmailStr | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    mobile: str | None = None
+    avatar: str | None = None   # data URL (base64) or "" to clear
 
 
 class UpdateUserRequest(BaseModel):
@@ -46,6 +60,7 @@ class HoldingIn(BaseModel):
     ticker: str
     buy_price: float
     quantity: float
+    deduct: bool = False   # subtract cost from the user's liquid budget
 
 
 class HoldingOut(BaseModel):
@@ -105,6 +120,24 @@ class SellIn(BaseModel):
     units: float
 
 
+class SaleOut(BaseModel):
+    id: int
+    holding_id: int
+    ticker: str
+    name: str | None = None
+    units: float
+    sell_price: float
+    buy_price: float
+    gain: float
+    proceeds: float
+    created_at: dt.datetime | None = None
+
+
+class SaleUpdate(BaseModel):
+    sell_price: float | None = None
+    units: float | None = None
+
+
 class ContactIn(BaseModel):
     title: str
     description: str | None = None
@@ -158,6 +191,10 @@ class TokenResponse(BaseModel):
     email: str
     role: str
     budget: float | None = None   # so the SPA can gate on "budget set"
+    first_name: str | None = None
+    last_name: str | None = None
+    mobile: str | None = None
+    avatar: str | None = None
 
 
 # ---- picks / stocks ----

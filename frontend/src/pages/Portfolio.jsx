@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import NumberInput from "../components/NumberInput.jsx";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
-
-const RANGES = [
-  { label: "1M", days: 30 }, { label: "3M", days: 90 }, { label: "6M", days: 180 },
-  { label: "1Y", days: 365 }, { label: "All", days: 0 },
-];
 
 function Kpi({ label, value, cls }) {
   return (
@@ -24,13 +17,10 @@ function Kpi({ label, value, cls }) {
 export default function Portfolio() {
   const { setUserBudget } = useAuth();
   const [pf, setPf] = useState(null);
-  const [assets, setAssets] = useState([]);
   const [alloc, setAlloc] = useState(null);
-  const [hist, setHist] = useState(null);
-  const [range, setRange] = useState(90);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "" });
+  const [form, setForm] = useState({ ticker: "", buy_price: "", quantity: "", deduct: true });
   const [msg, setMsg] = useState("");
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ buy_price: "", quantity: "" });
@@ -38,24 +28,21 @@ export default function Portfolio() {
   const [budgetInput, setBudgetInput] = useState("");
   const [sellFor, setSellFor] = useState(null);
   const [sellForm, setSellForm] = useState({ sell_price: "", units: "" });
+  const [showSales, setShowSales] = useState(false);
+  const [sales, setSales] = useState(null);
+  const [saleEditId, setSaleEditId] = useState(null);
+  const [saleEdit, setSaleEdit] = useState({ sell_price: "", units: "" });
   const fileRef = useRef(null);
 
   const load = async () => {
     const d = await api.portfolio();
     setPf(d);
+    setUserBudget(d.budget);
     if (d.budget > 0) { try { setAlloc(await api.allocate(d.budget)); } catch { setAlloc(null); } }
     else setAlloc(null);
   };
 
-  useEffect(() => {
-    load().catch((e) => setErr(e.message));
-    api.assets().then(setAssets).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (pf && pf.holdings.length) api.portfolioHistory(range).then(setHist).catch(() => {});
-    else setHist(null);
-  }, [range, pf?.holdings.length]);
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, []);
 
   const wrap = async (fn) => {
     setErr(""); setBusy(true);
@@ -65,8 +52,8 @@ export default function Portfolio() {
   const addHolding = (e) => {
     e.preventDefault();
     wrap(async () => {
-      await api.addHolding(form.ticker, parseFloat(form.buy_price), parseFloat(form.quantity));
-      setForm({ ticker: "", buy_price: "", quantity: "" });
+      await api.addHolding(form.ticker, parseFloat(form.buy_price), parseFloat(form.quantity), form.deduct);
+      setForm({ ticker: "", buy_price: "", quantity: "", deduct: form.deduct });
     });
   };
   const removeHolding = (h) => {
@@ -100,6 +87,19 @@ export default function Portfolio() {
     wrap(async () => { await api.setBudget(nb); setUserBudget(nb); setEditingBudget(false); });
   };
 
+  // ---- sell history ----
+  const openSales = () => { setShowSales(true); setSaleEditId(null); api.sales().then(setSales).catch((e) => setErr(e.message)); };
+  const refreshSales = () => api.sales().then(setSales).catch(() => {});
+  const startSaleEdit = (s) => { setSaleEditId(s.id); setSaleEdit({ sell_price: s.sell_price, units: s.units }); };
+  const saveSaleEdit = (s) => wrap(async () => {
+    await api.updateSale(s.id, { sell_price: parseFloat(saleEdit.sell_price), units: parseFloat(saleEdit.units) });
+    setSaleEditId(null); await refreshSales();
+  });
+  const removeSale = (s) => {
+    if (!window.confirm(`Remove this sell of ${s.units} ${s.ticker.replace(".EGX", "")}? Units go back to the holding and proceeds leave your budget.`)) return;
+    wrap(async () => { await api.deleteSale(s.id); await refreshSales(); });
+  };
+
   const onCsv = (e) => {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -130,8 +130,7 @@ export default function Portfolio() {
   if (!pf) return <div className="loading">Loading portfolio…</div>;
 
   const pnlCls = (v) => (v == null ? "" : v >= 0 ? "up" : "down");
-  const isNew = !pf.budget && pf.holdings.length === 0;
-  const editInput = { width: 72, background: "var(--bg)", border: "1px solid var(--border)",
+  const editInput = { width: 84, background: "var(--bg)", border: "1px solid var(--border)",
     color: "var(--text)", borderRadius: 6, padding: "6px 8px" };
 
   return (
@@ -140,34 +139,24 @@ export default function Portfolio() {
       {err && <div className="error">{err}</div>}
       {msg && <div className="card" style={{ padding: "10px 14px", marginBottom: 12, color: "var(--accent)", fontSize: 14 }}>{msg}</div>}
 
-      {isNew && (
-        <div className="card" style={{ padding: 18, marginBottom: 18, borderColor: "var(--accent)" }}>
-          <h3 style={{ marginTop: 0 }}>👋 Welcome to your Portfolio</h3>
-          <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-            <li><b>Set your budget</b> below — the cash you want to invest.</li>
-            <li><b>Add stocks you own</b> (ticker, buy price, quantity) — or Import CSV.</li>
-          </ol>
-        </div>
-      )}
-
       <div className="kpis">
         <Kpi label="Invested" value={money(pf.invested)} />
         <Kpi label="Current value" value={money(pf.current_value)} />
         <Kpi label="Earnings" cls={pnlCls(pf.earnings)}
           value={`${pf.earnings >= 0 ? "+" : ""}${money(pf.earnings)}`} />
-        <Kpi label="Budget" value={pf.budget ? money(pf.budget) : "—"} />
+        <Kpi label="Liquid money" value={pf.budget ? money(pf.budget) : "—"} />
       </div>
 
-      {/* Budget */}
-      <div className="section-title">Budget</div>
+      {/* Budget / Liquid money */}
+      <div className="section-title">Liquid money (budget)</div>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
         {!pf.budget || editingBudget ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
-              <label>Budget (EGP)</label>
-              <input type="number" step="any" autoFocus
+              <label>Liquid money (EGP)</label>
+              <NumberInput step={1000} min={0} autoFocus
                 value={editingBudget ? budgetInput : (budgetInput || "")}
-                onChange={(e) => setBudgetInput(e.target.value)} />
+                onChange={setBudgetInput} />
             </div>
             <button className="primary" style={{ width: "auto", padding: "11px 18px" }}
               disabled={busy} onClick={() => saveBudget(budgetInput)}>Save</button>
@@ -177,12 +166,16 @@ export default function Portfolio() {
           </div>
         ) : (
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <div style={{ fontSize: 26, fontWeight: 800 }}>{money(pf.budget)} <small style={{ color: "var(--muted)", fontSize: 13 }}>EGP</small></div>
+            <div style={{ fontSize: 26, fontWeight: 800 }}>{money(pf.budget)} <small style={{ color: "var(--muted)", fontSize: 13 }}>EGP free cash</small></div>
             <div style={{ flex: 1 }} />
             <button className="ghost" disabled={busy}
               onClick={() => { setBudgetInput(String(pf.budget)); setEditingBudget(true); }}>Edit</button>
           </div>
         )}
+        <p style={{ color: "var(--muted)", fontSize: 12, margin: "10px 0 0" }}>
+          Your free cash to invest. Buying a stock (with “deduct” ticked) lowers it; selling adds the
+          proceeds back automatically.
+        </p>
       </div>
 
       {/* Add holding */}
@@ -193,59 +186,73 @@ export default function Portfolio() {
             <label>Stock</label>
             <input list="tickers" required placeholder="Type or pick a ticker"
               value={form.ticker} onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
-            <datalist id="tickers">
-              {assets.map((a) => (
-                <option key={a.ticker} value={a.ticker.replace(".EGX", "")}>
-                  {a.ticker.replace(".EGX", "")} — {a.name}
-                </option>
-              ))}
-            </datalist>
           </div>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 120px" }}>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 130px" }}>
             <label>Buy price</label>
-            <input type="number" step="any" required value={form.buy_price} onChange={(e) => setForm({ ...form, buy_price: e.target.value })} />
+            <NumberInput step={0.5} min={0} value={form.buy_price}
+              onChange={(v) => setForm({ ...form, buy_price: v })} />
           </div>
-          <div className="field" style={{ marginBottom: 0, flex: "1 1 120px" }}>
+          <div className="field" style={{ marginBottom: 0, flex: "1 1 130px" }}>
             <label>Quantity</label>
-            <input type="number" step="any" required value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+            <NumberInput step={1} min={0} value={form.quantity}
+              onChange={(v) => setForm({ ...form, quantity: v })} />
           </div>
           <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy}>Add</button>
         </form>
-        <p style={{ color: "var(--muted)", fontSize: 12, margin: "10px 0 0" }}>
+        <label className="checkrow" style={{ marginTop: 12 }}>
+          <input type="checkbox" checked={form.deduct}
+            onChange={(e) => setForm({ ...form, deduct: e.target.checked })} />
+          Subtract this cost from my liquid money
+        </label>
+        <p style={{ color: "var(--muted)", fontSize: 12, margin: "8px 0 0" }}>
           Buying a stock you already own <b>averages in</b> (updates your average buy price).
         </p>
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
-          <button className="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>Import CSV</button>
+          <button type="button" className="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>Import CSV</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" onChange={onCsv} style={{ display: "none" }} />
           <a className="link" href={TEMPLATE} download="portfolio_template.csv">Download template</a>
           <span style={{ color: "var(--muted)", fontSize: 12 }}>CSV: ticker, buy_price, quantity</span>
         </div>
       </div>
+      <TickerOptions />
 
       {/* Holdings */}
-      <div className="section-title">Your holdings</div>
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table className="responsive">
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "22px 0 10px" }}>
+        <div className="section-title" style={{ margin: 0 }}>Your holdings</div>
+        <div style={{ flex: 1 }} />
+        <span style={{ color: "var(--muted)", fontSize: 13 }}>
+          Open: <b className={pnlCls(pf.pnl)}>{`${pf.pnl >= 0 ? "+" : ""}${money(pf.pnl)}`}</b>
+          {pf.realized_pnl ? <> · Realized: <b className={pnlCls(pf.realized_pnl)}>{`${pf.realized_pnl >= 0 ? "+" : ""}${money(pf.realized_pnl)}`}</b></> : null}
+        </span>
+        <button className="iconbtn" onClick={openSales}>🧾 Sell history</button>
+      </div>
+      <div className="card" style={{ padding: 4 }}>
+        <table className="responsive holdings">
           <thead>
             <tr>
-              <th>Stock</th><th>Signal</th><th className="num">Bought at</th><th className="num">Now</th>
-              <th className="num">Target sell</th><th className="num">P/L</th><th>Alert</th><th></th>
+              <th>Stock</th><th>Signal</th><th className="num">Bought</th><th className="num">Now</th>
+              <th className="num">Target</th><th className="num">P/L</th><th></th>
             </tr>
           </thead>
           <tbody>
             {pf.holdings.length === 0 && (
-              <tr><td colSpan={8} style={{ color: "var(--muted)" }}>No holdings yet — add one above.</td></tr>
+              <tr><td colSpan={7} style={{ color: "var(--muted)" }}>No holdings yet — add one above.</td></tr>
             )}
             {pf.holdings.map((h) => (
               <tr key={h.id} style={{ cursor: "default" }}>
                 <td className="tickercell" data-label="Stock">
                   <Link to={`/stocks/${h.ticker}`}>{h.ticker.replace(".EGX", "")}</Link>
                   <small>{h.name} · {h.quantity} sh{h.sold_qty > 0 ? ` · sold ${h.sold_qty}@${money(h.avg_sell_price)}` : ""}</small>
+                  {h.alert && (
+                    <div className={`alertline ${h.sell_suggested ? "warn" : ""}`}>
+                      {h.sell_suggested ? "⚠ " : ""}{h.alert}
+                    </div>
+                  )}
                 </td>
                 <td data-label="Signal">{h.signal ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span> : "—"}</td>
-                <td className="num" data-label="Bought at">
+                <td className="num" data-label="Bought">
                   {editId === h.id ? (
-                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
                       <input type="number" step="any" title="Buy price" style={editInput}
                         value={editForm.buy_price} onChange={(e) => setEditForm({ ...editForm, buy_price: e.target.value })} />
                       <input type="number" step="any" title="Quantity" style={editInput}
@@ -254,24 +261,23 @@ export default function Portfolio() {
                   ) : money(h.buy_price)}
                 </td>
                 <td className="num" data-label="Now">{money(h.current_price)}</td>
-                <td className="num up" data-label="Target sell">{money(h.target_price)}</td>
+                <td className="num up" data-label="Target">{money(h.target_price)}</td>
                 <td className={`num ${pnlCls(h.pnl)}`} data-label="P/L">
-                  {h.pnl == null ? "—" : `${h.pnl >= 0 ? "+" : ""}${money(h.pnl)}`}
-                  {h.pnl_pct != null && <small style={{ display: "block", color: "var(--muted)" }}>{signed(h.pnl_pct)}</small>}
+                  <span className="pl-main">{h.pnl == null ? "—" : `${h.pnl >= 0 ? "+" : ""}${money(h.pnl)}`}</span>
+                  {h.pnl_pct != null && <small className="pl-sub">{signed(h.pnl_pct)}</small>}
                 </td>
-                <td data-label="Alert">{h.alert ? <span className={h.sell_suggested ? "down" : ""}>{h.sell_suggested ? "⚠ " : ""}{h.alert}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                 <td data-label="">
                   {editId === h.id ? (
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button className="ghost" disabled={busy} onClick={() => saveEdit(h)}>Save</button>
-                      <button className="ghost" disabled={busy} onClick={() => setEditId(null)}>Cancel</button>
+                    <div className="acts">
+                      <button className="iconbtn" disabled={busy} onClick={() => saveEdit(h)}>Save</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => setEditId(null)}>Cancel</button>
                     </div>
                   ) : (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button className="ghost" disabled={busy} onClick={() => startEdit(h)}>Edit</button>
-                      <button className="ghost" disabled={busy} onClick={() => openSell(h)}
-                        style={{ color: h.sell_suggested ? "var(--red)" : "var(--text)", borderColor: h.sell_suggested ? "var(--red)" : "var(--border)" }}>Sell</button>
-                      <button className="ghost" disabled={busy} onClick={() => removeHolding(h)} style={{ color: "var(--muted)" }}>Remove</button>
+                    <div className="acts">
+                      <button className="iconbtn" disabled={busy} onClick={() => startEdit(h)}>Edit</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => openSell(h)}
+                        style={{ color: h.sell_suggested ? "var(--red)" : undefined, borderColor: h.sell_suggested ? "var(--red)" : undefined }}>Sell</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => removeHolding(h)}>Remove</button>
                     </div>
                   )}
                 </td>
@@ -281,51 +287,11 @@ export default function Portfolio() {
         </table>
       </div>
 
-      {/* Performance */}
-      {pf.holdings.length > 0 && (
-        <>
-          <div className="section-title">Performance</div>
-          <div className="card" style={{ padding: 16, marginBottom: 18 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
-              {RANGES.map((r) => (
-                <button key={r.days} className="ghost" onClick={() => setRange(r.days)}
-                  style={range === r.days ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}>
-                  {r.label}
-                </button>
-              ))}
-              <div style={{ flex: 1 }} />
-              <span style={{ color: "var(--muted)", fontSize: 13 }}>Open earnings:&nbsp;
-                <b className={pnlCls(pf.pnl)}>{`${pf.pnl >= 0 ? "+" : ""}${money(pf.pnl)}`}</b>
-                {pf.realized_pnl ? <> · Realized: <b className={pnlCls(pf.realized_pnl)}>{`${pf.realized_pnl >= 0 ? "+" : ""}${money(pf.realized_pnl)}`}</b></> : null}
-              </span>
-            </div>
-            {hist && hist.series.length > 1 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <LineChart data={hist.series} margin={{ top: 6, right: 16, left: 0, bottom: 0 }}>
-                  <CartesianGrid stroke="#232c3d" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: "#8a97ad", fontSize: 11 }} minTickGap={40} />
-                  <YAxis tick={{ fill: "#8a97ad", fontSize: 11 }} width={64} domain={["auto", "auto"]} />
-                  <Tooltip contentStyle={{ background: "#161c28", border: "1px solid #232c3d", borderRadius: 8 }} />
-                  <Line type="monotone" dataKey="value" name="Value" stroke="#3ddc97" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="invested" name="Cost basis" stroke="#8a97ad" strokeWidth={1} strokeDasharray="4 4" dot={false} />
-                  <Line type="monotone" dataKey="profit" name="Earnings" stroke="#4aa8ff" strokeWidth={1.5} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p style={{ color: "var(--muted)", margin: 0 }}>Not enough price history for this range yet.</p>
-            )}
-            <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
-              Value (green) vs. what you paid (dashed) vs. earnings (blue). End-of-day data.
-            </p>
-          </div>
-        </>
-      )}
-
       {/* Allocation */}
       <div className="section-title">Suggested allocation</div>
       <div className="card" style={{ padding: 16 }}>
         {!pf.budget ? (
-          <p style={{ color: "var(--muted)", margin: 0 }}>Set a budget above to see a suggested allocation.</p>
+          <p style={{ color: "var(--muted)", margin: 0 }}>Set your liquid money above to see a suggested allocation.</p>
         ) : !alloc || alloc.allocations.length === 0 ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>No buy candidates to allocate right now.</p>
         ) : (
@@ -358,26 +324,91 @@ export default function Portfolio() {
 
       {/* Sell modal */}
       {sellFor && (
-        <div onClick={() => setSellFor(null)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "grid", placeItems: "center", zIndex: 50, padding: 16 }}>
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ padding: 20, width: "100%", maxWidth: 420 }}>
-            <h3 style={{ marginTop: 0 }}>Sell {sellFor.ticker.replace(".EGX", "")}</h3>
+        <div className="modal-overlay" onClick={() => setSellFor(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+            <h3>Sell {sellFor.ticker.replace(".EGX", "")}</h3>
             <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
               You hold {sellFor.quantity} shares (avg buy {money(sellFor.buy_price)}).
             </p>
             <div className="field"><label>Sell price</label>
-              <input type="number" step="any" value={sellForm.sell_price}
-                onChange={(e) => setSellForm({ ...sellForm, sell_price: e.target.value })} /></div>
+              <NumberInput step={0.5} min={0} value={sellForm.sell_price}
+                onChange={(v) => setSellForm({ ...sellForm, sell_price: v })} /></div>
             <div className="field"><label>Units (max {sellFor.quantity})</label>
-              <input type="number" step="any" value={sellForm.units}
-                onChange={(e) => setSellForm({ ...sellForm, units: e.target.value })} /></div>
+              <NumberInput step={1} min={0} max={sellFor.quantity} value={sellForm.units}
+                onChange={(v) => setSellForm({ ...sellForm, units: v })} /></div>
             <p style={{ color: "var(--muted)", fontSize: 12 }}>
-              Selling all units closes the position. A partial sell reduces it and updates your
-              average sell price.
+              Proceeds are added to your liquid money. Selling all units closes the position; a partial
+              sell reduces it and updates your average sell price.
             </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <div className="modal-actions">
+              <div className="grow" />
               <button className="ghost" disabled={busy} onClick={() => setSellFor(null)}>Cancel</button>
               <button className="primary" style={{ width: "auto", padding: "11px 18px" }} disabled={busy} onClick={confirmSell}>Confirm sell</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sell history modal */}
+      {showSales && (
+        <div className="modal-overlay" onClick={() => setShowSales(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <h3>Sell history</h3>
+            <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 0 }}>
+              Edit or remove a sell. Changes re-open the units on the holding and adjust your liquid money.
+            </p>
+            {sales == null ? (
+              <p style={{ color: "var(--muted)" }}>Loading…</p>
+            ) : sales.length === 0 ? (
+              <p style={{ color: "var(--muted)" }}>No sells yet.</p>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="responsive">
+                  <thead>
+                    <tr><th>Stock</th><th>Date</th><th className="num">Units</th><th className="num">Price</th><th className="num">Realized</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {sales.map((s) => (
+                      <tr key={s.id} style={{ cursor: "default" }}>
+                        <td className="tickercell" data-label="Stock">{s.ticker.replace(".EGX", "")}<small>{s.name}</small></td>
+                        <td data-label="Date" style={{ color: "var(--muted)" }}>{(s.created_at || "").slice(0, 10)}</td>
+                        <td className="num" data-label="Units">
+                          {saleEditId === s.id
+                            ? <input type="number" step="any" style={editInput} value={saleEdit.units}
+                                onChange={(e) => setSaleEdit({ ...saleEdit, units: e.target.value })} />
+                            : s.units}
+                        </td>
+                        <td className="num" data-label="Price">
+                          {saleEditId === s.id
+                            ? <input type="number" step="any" style={editInput} value={saleEdit.sell_price}
+                                onChange={(e) => setSaleEdit({ ...saleEdit, sell_price: e.target.value })} />
+                            : money(s.sell_price)}
+                        </td>
+                        <td className={`num ${pnlCls(s.gain)}`} data-label="Realized">{`${s.gain >= 0 ? "+" : ""}${money(s.gain)}`}</td>
+                        <td data-label="">
+                          <div className="acts">
+                            {saleEditId === s.id ? (
+                              <>
+                                <button className="iconbtn" disabled={busy} onClick={() => saveSaleEdit(s)}>Save</button>
+                                <button className="iconbtn" disabled={busy} onClick={() => setSaleEditId(null)}>Cancel</button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="iconbtn" disabled={busy} onClick={() => startSaleEdit(s)}>Edit</button>
+                                <button className="iconbtn" disabled={busy} onClick={() => removeSale(s)}>Remove</button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="modal-actions">
+              <div className="grow" />
+              <button className="ghost" onClick={() => setShowSales(false)}>Close</button>
             </div>
           </div>
         </div>
@@ -388,5 +419,20 @@ export default function Portfolio() {
         suggestion weighted by success rate — <b>not financial advice</b>.
       </p>
     </div>
+  );
+}
+
+// Fills the shared #tickers datalist used by the Add-holding input.
+function TickerOptions() {
+  const [assets, setAssets] = useState([]);
+  useEffect(() => { api.assets().then(setAssets).catch(() => {}); }, []);
+  return (
+    <datalist id="tickers">
+      {assets.map((a) => (
+        <option key={a.ticker} value={a.ticker.replace(".EGX", "")}>
+          {a.ticker.replace(".EGX", "")} — {a.name}
+        </option>
+      ))}
+    </datalist>
   );
 }

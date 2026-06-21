@@ -39,6 +39,11 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # suspended = can't log in
     last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     budget: Mapped[float | None] = mapped_column(Float)  # EGP available to allocate
+    # --- profile (admin-set for now; self-serve registration is a future phase) ---
+    first_name: Mapped[str | None] = mapped_column(String(80))
+    last_name: Mapped[str | None] = mapped_column(String(80))
+    mobile: Mapped[str | None] = mapped_column(String(40))
+    avatar: Mapped[str | None] = mapped_column(Text)  # data URL (base64) profile picture
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     watchlist: Mapped[list["WatchlistItem"]] = relationship(
@@ -63,10 +68,32 @@ class Holding(Base):
     sold_qty: Mapped[float] = mapped_column(Float, default=0.0)
     avg_sell_price: Mapped[float | None] = mapped_column(Float)
     realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
+    from_budget: Mapped[bool] = mapped_column(Boolean, default=False)  # cost came out of budget
     closed: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     user: Mapped[User] = relationship(back_populates="holdings")
+    sales: Mapped[list["Sale"]] = relationship(cascade="all, delete-orphan")
+
+
+class Sale(Base):
+    """A single sell transaction against a holding (kept so sell history can be
+    listed, edited and removed; the holding's realized aggregates are derived
+    from these rows)."""
+
+    __tablename__ = "sales"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    holding_id: Mapped[int] = mapped_column(
+        ForeignKey("holdings.id", ondelete="CASCADE"), index=True
+    )
+    ticker: Mapped[str] = mapped_column(String(32), index=True)  # denormalized for display
+    units: Mapped[float] = mapped_column(Float)
+    sell_price: Mapped[float] = mapped_column(Float)
+    buy_price: Mapped[float] = mapped_column(Float)  # avg buy price at time of sale
+    gain: Mapped[float] = mapped_column(Float, default=0.0)  # realized P/L for this sale
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class ContactMessage(Base):

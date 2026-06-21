@@ -55,7 +55,7 @@ export default function Legal() {
         <h3>What we store</h3>
         <ul>
           <li>Your <b>email</b> and a <b>securely hashed</b> password (we never store it in plain text).</li>
-          <li>Your <b>watchlist</b> and <b>portfolio</b> entries, if you create them.</li>
+          <li>Your <b>profile</b> (name, mobile, photo) and <b>portfolio</b> entries, if you add them.</li>
           <li>Basic activity such as your last login time.</li>
           <li>A login token is kept in your browser's local storage to keep you signed in.</li>
         </ul>

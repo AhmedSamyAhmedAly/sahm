@@ -9,14 +9,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db, init_db
+from app.database import ensure_schema, get_db
 from app.models import Asset, DailyBar, PipelineRun, Recommendation, User
 from app.routers import admin, auth, contact, picks, portfolio, stocks, track_record
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    ensure_schema()  # create_all + idempotent column migrations (self-migrating deploys)
     yield
 
 

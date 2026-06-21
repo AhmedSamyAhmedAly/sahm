@@ -38,6 +38,7 @@ export const api = {
   login: (email, password) =>
     request("/api/auth/login", { method: "POST", auth: false, body: { email, password } }),
   me: () => request("/api/auth/me"),
+  updateProfile: (patch) => request("/api/auth/me", { method: "PATCH", body: patch }),
   picks: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/picks${q ? `?${q}` : ""}`);
@@ -50,8 +51,8 @@ export const api = {
   // ---- portfolio ----
   portfolio: () => request("/api/portfolio"),
   portfolioHistory: (days) => request(`/api/portfolio/history?days=${days}`),
-  addHolding: (ticker, buy_price, quantity) =>
-    request("/api/portfolio/holdings", { method: "POST", body: { ticker, buy_price, quantity } }),
+  addHolding: (ticker, buy_price, quantity, deduct = false) =>
+    request("/api/portfolio/holdings", { method: "POST", body: { ticker, buy_price, quantity, deduct } }),
   updateHolding: (id, patch) =>
     request(`/api/portfolio/holdings/${id}`, { method: "PATCH", body: patch }),
   importHoldings: (items) =>
@@ -59,19 +60,24 @@ export const api = {
   deleteHolding: (id) => request(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
   sellHolding: (id, sell_price, units) =>
     request(`/api/portfolio/holdings/${id}/sell`, { method: "POST", body: { sell_price, units } }),
+  sales: () => request("/api/portfolio/sales"),
+  updateSale: (id, patch) =>
+    request(`/api/portfolio/sales/${id}`, { method: "PATCH", body: patch }),
+  deleteSale: (id) => request(`/api/portfolio/sales/${id}`, { method: "DELETE" }),
   setBudget: (budget) => request("/api/portfolio/budget", { method: "PUT", body: { budget } }),
   allocate: (budget) => request("/api/portfolio/allocate", { method: "POST", body: { budget } }),
 
   // ---- admin ----
   adminStats: () => request("/api/admin/stats"),
   adminUsers: () => request("/api/admin/users"),
-  adminCreateUser: (email, password, role = "member") =>
-    request("/api/admin/users", { method: "POST", body: { email, password, role } }),
+  adminCreateUser: (body) =>
+    request("/api/admin/users", { method: "POST", body }),
   adminUpdateUser: (id, patch) =>
     request(`/api/admin/users/${id}`, { method: "PATCH", body: patch }),
   adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
   adminMessages: () => request("/api/admin/messages"),
   resolveMessage: (id) => request(`/api/admin/messages/${id}/resolve`, { method: "POST" }),
+  deleteMessage: (id) => request(`/api/admin/messages/${id}`, { method: "DELETE" }),
 
   // ---- contact ----
   contact: (title, description, reply, attachments) =>

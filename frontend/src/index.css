@@ -120,6 +120,105 @@ button.ghost { background: transparent; color: var(--muted); border: 1px solid v
 .reasons li { margin: 6px 0; color: var(--text); font-size: 14px; }
 .loading { color: var(--muted); padding: 40px; text-align: center; }
 
+/* ---------- number inputs: hide ugly native spinners everywhere ---------- */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+/* clean theme-matched stepper (NumberInput component) */
+.numfield { position: relative; display: block; }
+.numfield > input { width: 100%; padding-right: 36px; }
+.numsteps {
+  position: absolute; top: 4px; right: 4px; bottom: 4px; width: 28px;
+  display: flex; flex-direction: column; gap: 2px; pointer-events: none;
+}
+.numsteps > button {
+  flex: 1; min-height: 0; display: grid; place-items: center; padding: 0;
+  background: var(--card-2); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; font-size: 8px; line-height: 1; cursor: pointer; pointer-events: auto;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.numsteps > button:hover { color: var(--accent); border-color: var(--accent); background: var(--bg-soft); }
+.numsteps > button:active { transform: translateY(0.5px); }
+
+/* ---------- checkbox row (e.g. "deduct from budget") ---------- */
+.checkrow {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  color: var(--text); font-size: 13px; user-select: none;
+}
+.checkrow input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+/* ---------- holdings: clean fitted table, no horizontal scroll ---------- */
+.holdings { table-layout: auto; }
+.holdings td, .holdings th { padding: 14px 12px; white-space: normal; }
+.holdings .pl-main { font-weight: 800; font-variant-numeric: tabular-nums; }
+.holdings .pl-sub { display: block; color: var(--muted); font-size: 12px; }
+.holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.holdings .alertline.warn { color: var(--red); }
+.holdings .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.holdings .acts button { padding: 6px 10px; font-size: 13px; }
+.iconbtn {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 8px; padding: 7px 12px; cursor: pointer; font-weight: 600; font-size: 13px;
+}
+.iconbtn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ---------- modal (onboarding + sell history) ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(4, 7, 12, 0.72);
+  display: grid; place-items: center; z-index: 60; padding: 16px;
+  backdrop-filter: blur(2px);
+}
+.modal {
+  width: 100%; background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px; max-height: 92vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+}
+.modal h2, .modal h3 { margin-top: 0; }
+.steps-dots { display: flex; gap: 6px; margin-bottom: 16px; }
+.steps-dots i { width: 26px; height: 4px; border-radius: 999px; background: var(--border); }
+.steps-dots i.on { background: var(--accent); }
+.onb-feature { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0; }
+.onb-feature .ic { font-size: 22px; line-height: 1.2; }
+.onb-feature b { display: block; margin-bottom: 2px; }
+.onb-feature span { color: var(--muted); font-size: 13px; }
+.modal-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
+.modal-actions .grow { flex: 1; }
+.helpbtn {
+  background: var(--card-2); border: 1px solid var(--border); color: var(--muted);
+  width: 30px; height: 30px; border-radius: 999px; cursor: pointer; font-weight: 800;
+  display: grid; place-items: center; font-size: 14px;
+}
+.helpbtn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- profile menu (top-right avatar dropdown) ---------- */
+.profile-menu { position: relative; }
+.avatar-btn { background: transparent; border: none; padding: 0; cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
+.avatar-btn:hover { box-shadow: 0 0 0 2px var(--accent); }
+.dropdown {
+  position: absolute; right: 0; top: calc(100% + 8px); width: 240px; z-index: 40;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45); overflow: hidden; padding: 6px;
+}
+.dropdown-head { display: flex; gap: 10px; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.dropdown-item {
+  display: block; width: 100%; text-align: left; background: transparent; border: none;
+  color: var(--text); padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.dropdown-item:hover { background: var(--card-2); }
+.dropdown-item.danger { color: var(--red); }
+
+/* ---------- nav dropdown (e.g. Admin) ---------- */
+.navdrop { position: relative; display: inline-flex; }
+.navdrop > button.link {
+  background: transparent; border: none; cursor: pointer; color: var(--muted);
+  font-weight: 600; font-size: 14px; font-family: inherit; padding: 0;
+}
+.navdrop > button.link:hover, .navdrop.open > button.link { color: var(--text); }
+.navdrop .dropdown { width: 190px; left: 0; right: auto; }
+.navdrop .dropdown a.dropdown-item { color: var(--text); text-decoration: none; }
+.navdrop .dropdown a.dropdown-item.active { color: var(--accent); }
+
 @media (max-width: 820px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }
