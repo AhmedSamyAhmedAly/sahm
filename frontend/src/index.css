@@ -151,6 +151,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ---------- holdings: clean fitted table, no horizontal scroll ---------- */
 .holdings { table-layout: auto; }
 .holdings td, .holdings th { padding: 14px 12px; white-space: normal; }
+/* keep signal pills on one tidy line (e.g. "STRONG BUY MORE") so they don't
+   wrap mid-cell and stretch the row */
+.holdings .badge { white-space: nowrap; font-size: 10px; padding: 3px 8px; letter-spacing: 0.2px; }
 .holdings .pl-main { font-weight: 800; font-variant-numeric: tabular-nums; }
 .holdings .pl-sub { display: block; color: var(--muted); font-size: 12px; }
 .holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 600; }
