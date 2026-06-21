@@ -368,7 +368,7 @@ export default function Portfolio() {
               <div style={{ overflowX: "auto" }}>
                 <table className="responsive">
                   <thead>
-                    <tr><th>Stock</th><th>Date</th><th className="num">Units</th><th className="num">Price</th><th className="num">Realized</th><th></th></tr>
+                    <tr><th>Stock</th><th>Date</th><th className="num">Units</th><th className="num">Bought at</th><th className="num">Sold at</th><th className="num">Earnings</th><th></th></tr>
                   </thead>
                   <tbody>
                     {sales.map((s) => (
@@ -381,13 +381,14 @@ export default function Portfolio() {
                                 onChange={(e) => setSaleEdit({ ...saleEdit, units: e.target.value })} />
                             : s.units}
                         </td>
-                        <td className="num" data-label="Price">
+                        <td className="num" data-label="Bought at">{money(s.buy_price)}</td>
+                        <td className="num" data-label="Sold at">
                           {saleEditId === s.id
                             ? <input type="number" step="any" style={editInput} value={saleEdit.sell_price}
                                 onChange={(e) => setSaleEdit({ ...saleEdit, sell_price: e.target.value })} />
                             : money(s.sell_price)}
                         </td>
-                        <td className={`num ${pnlCls(s.gain)}`} data-label="Realized">{`${s.gain >= 0 ? "+" : ""}${money(s.gain)}`}</td>
+                        <td className={`num ${pnlCls(s.gain)}`} data-label="Earnings">{`${s.gain >= 0 ? "+" : ""}${money(s.gain)}`}</td>
                         <td data-label="">
                           <div className="acts">
                             {saleEditId === s.id ? (

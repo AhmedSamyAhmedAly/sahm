@@ -132,7 +132,11 @@ def get_portfolio(db: Session = Depends(get_db), user: User = Depends(get_curren
     closes, _ = _latest_closes(db)
     recs = _latest_recs(db)
 
-    realized_total = sum(float(h.realized_pnl or 0) for h in all_holdings)
+    # Earnings = sum of (sell price − buy price) × units across the sell history,
+    # read straight from the Sale rows so it always matches the Sell-history list.
+    realized_total = float(db.execute(
+        select(func.coalesce(func.sum(Sale.gain), 0.0)).where(Sale.user_id == user.id)
+    ).scalar() or 0.0)
     open_holdings = [h for h in all_holdings if not h.closed and float(h.quantity) > 0]
     out = [_enrich(h, names, closes, recs) for h in open_holdings]
     invested = sum(h.invested for h in out)
