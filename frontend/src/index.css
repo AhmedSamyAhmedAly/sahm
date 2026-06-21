@@ -150,7 +150,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---------- holdings: clean fitted table, no horizontal scroll ---------- */
 .holdings { table-layout: auto; }
-.holdings td, .holdings th { padding: 14px 12px; white-space: normal; }
+/* top-align so single-line numbers (Bought/Now/Target) line up with the P/L
+   number, which stacks a percent beneath it */
+.holdings td, .holdings th { padding: 14px 12px; white-space: normal; vertical-align: top; }
 /* keep signal pills on one tidy line (e.g. "STRONG BUY MORE") so they don't
    wrap mid-cell and stretch the row */
 .holdings .badge { white-space: nowrap; font-size: 10px; padding: 3px 8px; letter-spacing: 0.2px; }
