@@ -23,7 +23,7 @@ export default function NumberInput({
         type="number"
         inputMode="decimal"
         value={value}
-        step={step}
+        step="any"          /* accept any decimal; the ▲▼ buttons bump by `step` */
         min={min}
         max={max}
         onChange={(e) => onChange(e.target.value)}
