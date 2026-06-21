@@ -154,8 +154,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* keep signal pills on one tidy line (e.g. "STRONG BUY MORE") so they don't
    wrap mid-cell and stretch the row */
 .holdings .badge { white-space: nowrap; font-size: 10px; padding: 3px 8px; letter-spacing: 0.2px; }
-.holdings .pl-main { font-weight: 800; font-variant-numeric: tabular-nums; }
-.holdings .pl-sub { display: block; color: var(--muted); font-size: 12px; }
+.holdings td.num { text-align: right; }
+.holdings .pl-main { display: block; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+.holdings .pl-sub { display: block; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 600; }
 .holdings .alertline.warn { color: var(--red); }
 .holdings .alertline.good { color: var(--green); }
