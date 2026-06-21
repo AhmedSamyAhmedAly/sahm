@@ -1,6 +1,7 @@
 """FastAPI application entrypoint."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -13,10 +14,27 @@ from app.database import ensure_schema, get_db
 from app.models import Asset, DailyBar, PipelineRun, Recommendation, User
 from app.routers import admin, auth, contact, picks, portfolio, stocks, track_record
 
+log = logging.getLogger("sahm")
+
+
+def _sync_schema_safely() -> None:
+    """create_all + idempotent column migrations. Guarded so a transient DB blip
+    never breaks import/startup."""
+    try:
+        ensure_schema()
+    except Exception:  # noqa: BLE001
+        log.exception("ensure_schema failed")
+
+
+# Vercel's @vercel/python runtime does not reliably fire ASGI lifespan events, so
+# run the (idempotent) schema sync at import time too — this is what makes a plain
+# `git push` deploy self-migrate Neon on the serverless cold start.
+_sync_schema_safely()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    ensure_schema()  # create_all + idempotent column migrations (self-migrating deploys)
+    _sync_schema_safely()  # also covers uvicorn/Render where lifespan does run
     yield
 
 
