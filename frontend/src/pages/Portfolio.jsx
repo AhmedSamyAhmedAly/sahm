@@ -5,6 +5,15 @@ import { useAuth } from "../auth.jsx";
 import NumberInput from "../components/NumberInput.jsx";
 import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
 
+// For stocks you already own, a buy signal means "add to the position".
+const HOLDING_SIGNAL_LABEL = {
+  strong_buy: "STRONG BUY MORE",
+  buy: "BUY MORE",
+  hold: "HOLD",
+  sell: "SELL",
+  strong_sell: "STRONG SELL",
+};
+
 function Kpi({ label, value, cls }) {
   return (
     <div className="kpi">
@@ -249,9 +258,9 @@ export default function Portfolio() {
                   )}
                 </td>
                 <td data-label="Signal">
-                  {["hold", "sell", "strong_sell"].includes(h.signal)
-                    ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span>
-                    : <span style={{ color: "var(--muted)" }}>—</span>}
+                  {h.signal
+                    ? <span className={`badge ${h.signal}`}>{HOLDING_SIGNAL_LABEL[h.signal] || SIGNAL_LABEL[h.signal]}</span>
+                    : <span className="pill">no actions</span>}
                 </td>
                 <td className="num" data-label="Bought">
                   {editId === h.id ? (
