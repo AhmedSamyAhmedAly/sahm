@@ -142,6 +142,25 @@ export default function PicksView({
           )}
         </div>
 
+        {!minimal && (
+          <div className="legend">
+            <span className="legend-title">News</span>
+            <span>🟢 positive</span>
+            <span>🔴 negative</span>
+            <span>➖ neutral</span>
+            <span title="A strong, recent event (earnings, a big contract, a deal, a payout…) that can move the price soon.">
+              ⚡ catalyst
+            </span>
+            <span>— not analysed</span>
+            <span className="legend-sep" />
+            <span className="legend-title">Signal</span>
+            <span><span className="badge strong_buy">STRONG BUY</span> / <span className="badge buy">BUY</span></span>
+            <span><span className="badge hold">HOLD</span></span>
+            <span><span className="badge sell">SELL</span> / <span className="badge strong_sell">STRONG SELL</span></span>
+            <span><span className="pill">data only</span> didn’t pass filters — price only, no prediction</span>
+          </div>
+        )}
+
         <div style={{ overflowX: "auto" }}>
           {minimal ? (
             <table className="responsive">

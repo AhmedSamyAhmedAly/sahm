@@ -192,6 +192,19 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .helpbtn:hover { color: var(--accent); border-color: var(--accent); }
 
+/* ---------- legend (News / Signal key under the toolbar) ---------- */
+.legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  color: var(--muted); font-size: 12px;
+}
+.legend .legend-title {
+  text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+  color: var(--text); font-size: 11px;
+}
+.legend .badge, .legend .pill { font-size: 10px; }
+.legend-sep { width: 1px; height: 16px; background: var(--border); }
+
 /* ---------- profile menu (top-right avatar dropdown) ---------- */
 .profile-menu { position: relative; }
 .avatar-btn { background: transparent; border: none; padding: 0; cursor: pointer; display: grid; place-items: center; border-radius: 50%; }
