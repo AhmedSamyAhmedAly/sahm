@@ -71,10 +71,15 @@ def stock_detail(
         for rec, oc in hist_rows
     ]
 
+    # Strip the model identifier ("engine") so we never expose which AI we use.
+    news = None
+    if latest_rec and latest_rec.news:
+        news = {k: v for k, v in latest_rec.news.items() if k != "engine"}
+
     return StockDetail(
         ticker=ticker, name=asset.name, sector=asset.sector,
         latest=latest_pick, components=components, bars=bar_list, history=history,
-        news=(latest_rec.news if latest_rec else None),
+        news=news,
     )
 
 

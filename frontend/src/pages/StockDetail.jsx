@@ -135,9 +135,6 @@ export default function StockDetail() {
               </span>
               {p?.news_catalyst && <span className="pill" style={{ color: "var(--amber)" }}>⚡ catalyst</span>}
               {d.news?.risk_flag && <span className="pill" style={{ color: "var(--red)" }}>⚠ risk</span>}
-              {d.news?.engine && d.news.engine !== "keyword" && d.news.engine !== "none" && (
-                <span className="pill">AI: {d.news.engine}</span>
-              )}
             </div>
             {p?.news_thesis && <p style={{ marginBottom: 8 }}>{p.news_thesis}</p>}
             <ul className="reasons" style={{ marginTop: 4 }}>

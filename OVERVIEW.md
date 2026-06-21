@@ -62,7 +62,7 @@ lying). About half still miss, which is exactly why stops and diversification ma
 - **Frontend:** React + Vite. **API:** FastAPI (Python). **Database:** Postgres (Neon).
 - **Hosting:** Vercel (frontend + serverless API), all on free tiers.
 - **Engine:** pandas + scikit-learn (gradient-boosted trees, probability-calibrated, no look-ahead
-  leakage). **News AI:** OpenAI on the daily job only.
+  leakage). **News AI:** an LLM on the daily job only.
 - **Automation:** a nightly GitHub Action runs the full scan and publishes results.
 
 ---
