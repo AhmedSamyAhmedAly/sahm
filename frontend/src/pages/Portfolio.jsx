@@ -140,15 +140,15 @@ export default function Portfolio() {
       {msg && <div className="card" style={{ padding: "10px 14px", marginBottom: 12, color: "var(--accent)", fontSize: 14 }}>{msg}</div>}
 
       <div className="kpis">
-        <Kpi label="Invested" value={money(pf.invested)} />
-        <Kpi label="Current value" value={money(pf.current_value)} />
-        <Kpi label="Earnings" cls={pnlCls(pf.earnings)}
-          value={`${pf.earnings >= 0 ? "+" : ""}${money(pf.earnings)}`} />
-        <Kpi label="Liquid money" value={pf.budget ? money(pf.budget) : "—"} />
+        <Kpi label="💼 Invested" value={money(pf.invested)} />
+        <Kpi label="📊 Current value" value={money(pf.current_value)} />
+        <Kpi label="💰 Earnings (sold)" cls={pnlCls(pf.realized_pnl)}
+          value={`${pf.realized_pnl >= 0 ? "+" : ""}${money(pf.realized_pnl)}`} />
+        <Kpi label="💧 Liquid money" value={pf.budget ? money(pf.budget) : "—"} />
       </div>
 
       {/* Budget / Liquid money */}
-      <div className="section-title">Liquid money (budget)</div>
+      <div className="section-title">💧 Liquid money (budget)</div>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
         {!pf.budget || editingBudget ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -179,7 +179,7 @@ export default function Portfolio() {
       </div>
 
       {/* Add holding */}
-      <div className="section-title">Add a stock you own</div>
+      <div className="section-title">➕ Add a stock you own</div>
       <div className="card" style={{ padding: 16, marginBottom: 18 }}>
         <form onSubmit={addHolding} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div className="field" style={{ marginBottom: 0, flex: "1 1 200px" }}>
@@ -218,12 +218,8 @@ export default function Portfolio() {
 
       {/* Holdings */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "22px 0 10px" }}>
-        <div className="section-title" style={{ margin: 0 }}>Your holdings</div>
+        <div className="section-title" style={{ margin: 0 }}>📦 Your holdings</div>
         <div style={{ flex: 1 }} />
-        <span style={{ color: "var(--muted)", fontSize: 13 }}>
-          Open: <b className={pnlCls(pf.pnl)}>{`${pf.pnl >= 0 ? "+" : ""}${money(pf.pnl)}`}</b>
-          {pf.realized_pnl ? <> · Realized: <b className={pnlCls(pf.realized_pnl)}>{`${pf.realized_pnl >= 0 ? "+" : ""}${money(pf.realized_pnl)}`}</b></> : null}
-        </span>
         <button className="iconbtn" onClick={openSales}>🧾 Sell history</button>
       </div>
       <div className="card" style={{ padding: 4 }}>
@@ -242,14 +238,21 @@ export default function Portfolio() {
               <tr key={h.id} style={{ cursor: "default" }}>
                 <td className="tickercell" data-label="Stock">
                   <Link to={`/stocks/${h.ticker}`}>{h.ticker.replace(".EGX", "")}</Link>
-                  <small>{h.name} · {h.quantity} sh{h.sold_qty > 0 ? ` · sold ${h.sold_qty}@${money(h.avg_sell_price)}` : ""}</small>
+                  <small>
+                    {h.name} · {h.quantity} sh{h.sold_qty > 0 ? ` · sold ${h.sold_qty}@${money(h.avg_sell_price)}` : ""}
+                    {h.from_budget ? " · 💧 from budget" : ""}
+                  </small>
                   {h.alert && (
-                    <div className={`alertline ${h.sell_suggested ? "warn" : ""}`}>
-                      {h.sell_suggested ? "⚠ " : ""}{h.alert}
+                    <div className={`alertline ${h.alert === "Stop loss" ? "warn" : "good"}`}>
+                      {h.alert === "Stop loss" ? "🛑 Stop loss" : "🎯 Take profit"}
                     </div>
                   )}
                 </td>
-                <td data-label="Signal">{h.signal ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span> : "—"}</td>
+                <td data-label="Signal">
+                  {["hold", "sell", "strong_sell"].includes(h.signal)
+                    ? <span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span>
+                    : <span style={{ color: "var(--muted)" }}>—</span>}
+                </td>
                 <td className="num" data-label="Bought">
                   {editId === h.id ? (
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
@@ -269,15 +272,15 @@ export default function Portfolio() {
                 <td data-label="">
                   {editId === h.id ? (
                     <div className="acts">
-                      <button className="iconbtn" disabled={busy} onClick={() => saveEdit(h)}>Save</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => saveEdit(h)}>✓ Save</button>
                       <button className="iconbtn" disabled={busy} onClick={() => setEditId(null)}>Cancel</button>
                     </div>
                   ) : (
                     <div className="acts">
-                      <button className="iconbtn" disabled={busy} onClick={() => startEdit(h)}>Edit</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => startEdit(h)}>✏️ Edit</button>
                       <button className="iconbtn" disabled={busy} onClick={() => openSell(h)}
-                        style={{ color: h.sell_suggested ? "var(--red)" : undefined, borderColor: h.sell_suggested ? "var(--red)" : undefined }}>Sell</button>
-                      <button className="iconbtn" disabled={busy} onClick={() => removeHolding(h)}>Remove</button>
+                        style={{ color: h.sell_suggested ? "var(--red)" : undefined, borderColor: h.sell_suggested ? "var(--red)" : undefined }}>💵 Sell</button>
+                      <button className="iconbtn" disabled={busy} onClick={() => removeHolding(h)}>🗑️ Remove</button>
                     </div>
                   )}
                 </td>
@@ -288,7 +291,7 @@ export default function Portfolio() {
       </div>
 
       {/* Allocation */}
-      <div className="section-title">Suggested allocation</div>
+      <div className="section-title">🎯 Suggested allocation</div>
       <div className="card" style={{ padding: 16 }}>
         {!pf.budget ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>Set your liquid money above to see a suggested allocation.</p>

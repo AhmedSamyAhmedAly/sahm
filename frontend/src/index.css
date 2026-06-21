@@ -153,8 +153,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .holdings td, .holdings th { padding: 14px 12px; white-space: normal; }
 .holdings .pl-main { font-weight: 800; font-variant-numeric: tabular-nums; }
 .holdings .pl-sub { display: block; color: var(--muted); font-size: 12px; }
-.holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 600; }
 .holdings .alertline.warn { color: var(--red); }
+.holdings .alertline.good { color: var(--green); }
 .holdings .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 .holdings .acts button { padding: 6px 10px; font-size: 13px; }
 .iconbtn {

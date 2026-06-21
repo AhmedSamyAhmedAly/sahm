@@ -66,14 +66,13 @@ def _enrich(h: Holding, names: dict, closes: dict, recs: dict) -> HoldingOut:
     target = float(rec.target_price) if rec and rec.target_price is not None else None
     stop = float(rec.stop_loss) if rec and rec.stop_loss is not None else None
 
+    # Sell reason is price-based only: hit the profit target, or hit the stop.
     alert = None
     sell = False
-    if signal in ("sell", "strong_sell"):
-        alert, sell = f"Signal turned {signal.replace('_', ' ')}", True
-    elif price is not None and target is not None and price >= target:
-        alert, sell = "Target reached", True
+    if price is not None and target is not None and price >= target:
+        alert, sell = "Take profit", True
     elif price is not None and stop is not None and price <= stop:
-        alert, sell = "Stop hit", True
+        alert, sell = "Stop loss", True
 
     return HoldingOut(
         id=h.id, ticker=h.ticker, name=names.get(h.ticker), buy_price=buy, quantity=qty,
@@ -83,6 +82,7 @@ def _enrich(h: Holding, names: dict, closes: dict, recs: dict) -> HoldingOut:
         pnl_pct=round(pnl_pct, 2) if pnl_pct is not None else None,
         signal=signal, success_prob=(rec.success_prob if rec else None),
         target_price=target, stop_loss=stop, alert=alert, sell_suggested=sell,
+        from_budget=bool(h.from_budget),
         sold_qty=float(h.sold_qty or 0),
         avg_sell_price=(float(h.avg_sell_price) if h.avg_sell_price is not None else None),
         realized_pnl=round(float(h.realized_pnl or 0), 2),

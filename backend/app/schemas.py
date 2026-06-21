@@ -78,8 +78,9 @@ class HoldingOut(BaseModel):
     success_prob: float | None = None
     target_price: float | None = None   # suggested target sell price
     stop_loss: float | None = None
-    alert: str | None = None          # e.g. "Signal turned sell", "Target reached"
+    alert: str | None = None          # sell reason: "Take profit" | "Stop loss"
     sell_suggested: bool = False
+    from_budget: bool = False         # cost was subtracted from liquid budget
     sold_qty: float = 0
     avg_sell_price: float | None = None
     realized_pnl: float = 0
