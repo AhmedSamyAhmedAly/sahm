@@ -204,8 +204,9 @@ class PickOut(BaseModel):
     ticker: str
     name: str | None = None
     sector: str | None = None
-    signal: str
-    score: float
+    signal: str | None = None   # None = unscored (didn't pass scan filters), data-only
+    score: float | None = None
+    last_close: float | None = None        # latest end-of-day close we have
     success_prob: float | None = None      # 0-1 backtested hit-rate
     success_n: int | None = None
     target_pct: float | None = None

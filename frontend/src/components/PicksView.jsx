@@ -69,7 +69,7 @@ export default function PicksView({
         if (sort === "prob") return (a.success_prob || 0) - (b.success_prob || 0);
         if (sort === "rr") return (a.risk_reward || 0) - (b.risk_reward || 0);
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
-        return a.score - b.score;
+        return (a.score || 0) - (b.score || 0);
       };
       const sign = dir === "asc" ? 1 : -1;
       r = [...r].sort((a, b) => sign * cmp(a, b));
@@ -175,14 +175,24 @@ export default function PicksView({
                     <td className="tickercell" data-label="Stock">
                       {p.ticker.replace(".EGX", "")}<small>{p.name}</small>
                     </td>
-                    <td data-label="Signal"><span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span></td>
+                    <td data-label="Signal">
+                      {p.signal
+                        ? <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>
+                        : <span className="pill" title="Did not pass the scan filters — data only">data only</span>}
+                    </td>
                     <td data-label="News"><NewsChip p={p} /></td>
                     <td data-label="Score">
-                      <div className="scorebar"><i style={{ width: `${p.score}%` }} /></div>
-                      <small style={{ color: "var(--muted)" }}>{p.score}</small>
+                      {p.score == null ? (
+                        <small style={{ color: "var(--muted)" }}>—</small>
+                      ) : (
+                        <>
+                          <div className="scorebar"><i style={{ width: `${p.score}%` }} /></div>
+                          <small style={{ color: "var(--muted)" }}>{p.score}</small>
+                        </>
+                      )}
                     </td>
                     <td className="prob" data-label="Success"><b>{prob(p.success_prob)}</b></td>
-                    <td className="num" data-label="Entry">{money(p.entry_price)}</td>
+                    <td className="num" data-label="Entry">{money(p.entry_price ?? p.last_close)}</td>
                     <td className="num up" data-label="Target">{money(p.target_price)}</td>
                     <td className="num down" data-label="Stop">{money(p.stop_loss)}</td>
                     <td className="num hide-sm" data-label="R:R">{p.risk_reward ?? "—"}</td>
@@ -201,8 +211,9 @@ export default function PicksView({
         {minimal
           ? "Browse the full EGX universe. Tap a stock for details. "
           : "Success is the historical, backtested/ML hit-rate for stocks in the same score band — not a guarantee. "}
-        Sell/hold signals for stocks you own appear on your Portfolio. Educational/research tool,
-        <b> not financial advice</b>.
+        Stocks marked <b>“data only”</b> didn’t pass our liquidity/history filters, so we show their
+        latest price but make <b>no prediction</b> for them. Sell/hold signals for stocks you own
+        appear on your Portfolio. Educational/research tool, <b>not financial advice</b>.
       </p>
     </div>
   );

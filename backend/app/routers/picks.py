@@ -8,10 +8,26 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Asset, Recommendation, User
+from app.models import Asset, DailyBar, Recommendation, User
 from app.schemas import PickOut, PicksResponse
 
 router = APIRouter(prefix="/api", tags=["picks"])
+
+
+def _latest_close_per_ticker(db: Session) -> dict[str, float]:
+    """Most recent close we have for every ticker (so unscored stocks can still
+    show their last price)."""
+    sub = (
+        select(DailyBar.ticker, func.max(DailyBar.date).label("md"))
+        .group_by(DailyBar.ticker)
+        .subquery()
+    )
+    rows = db.execute(
+        select(DailyBar.ticker, DailyBar.close).join(
+            sub, (DailyBar.ticker == sub.c.ticker) & (DailyBar.date == sub.c.md)
+        )
+    ).all()
+    return {t: float(c) for t, c in rows if c is not None}
 
 
 def band_override(rec: Recommendation, target: float | None, horizon: int | None) -> dict | None:
@@ -35,7 +51,7 @@ def band_override(rec: Recommendation, target: float | None, horizon: int | None
 
 
 def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
-             ov: dict | None = None) -> PickOut:
+             ov: dict | None = None, last_close: float | None = None) -> PickOut:
     feats = rec.features or {}
     ov = ov or {}
     return PickOut(
@@ -45,6 +61,7 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
         sector=asset.sector if asset else None,
         signal=ov.get("signal", rec.signal),
         score=rec.score,
+        last_close=last_close,
         success_prob=ov.get("success_prob", rec.success_prob),
         success_n=ov.get("success_n", rec.success_n),
         target_pct=ov.get("target_pct", rec.target_pct),
@@ -102,24 +119,46 @@ def get_picks(
         q = q.where(Asset.sector == sector)
     rows = db.execute(q).all()
 
+    closes = _latest_close_per_ticker(db)
+
     # Apply the chosen band, filter on the effective signal, then rank by the
-    # effective success probability (with a light news nudge).
+    # effective success probability (with a light news nudge). Tuple shape:
+    # (kind, rec, asset, ov, sort_key).
     w = settings.news_weight
-    items = []
+    items: list = []
+    rec_tickers = set()
     for rec, asset in rows:
+        rec_tickers.add(rec.ticker)
         ov = band_override(rec, target, horizon)
         eff_signal = (ov or {}).get("signal", rec.signal)
         if signal and eff_signal != signal:
             continue
         eff_prob = ((ov or {}).get("success_prob", rec.success_prob)) or 0.0
-        items.append((rec, asset, ov, eff_prob + w * (rec.news_sentiment or 0.0)))
+        items.append(("rec", rec, asset, ov, eff_prob + w * (rec.news_sentiment or 0.0)))
 
-    items.sort(key=lambda x: x[3], reverse=True)
+    # Every other LISTED stock that didn't pass the scan filters: show it as a
+    # data-only row (last price, no prediction). Skipped when a specific signal
+    # is requested, since unscored stocks have no signal.
+    if not signal:
+        listed = db.execute(select(Asset).where(Asset.is_listed.is_(True))).scalars().all()
+        for asset in listed:
+            if asset.ticker in rec_tickers:
+                continue
+            if sector and asset.sector != sector:
+                continue
+            items.append(("data", None, asset, None, -1.0))
+
+    items.sort(key=lambda x: x[4], reverse=True)
     items = items[:limit]
-    picks = [
-        _to_pick(i + 1, rec, asset, ov)
-        for i, (rec, asset, ov, _) in enumerate(items)
-    ]
+    picks = []
+    for i, (kind, rec, asset, ov, _) in enumerate(items):
+        if kind == "rec":
+            picks.append(_to_pick(i + 1, rec, asset, ov, closes.get(rec.ticker)))
+        else:
+            picks.append(PickOut(
+                rank=i + 1, ticker=asset.ticker, name=asset.name, sector=asset.sector,
+                signal=None, score=None, last_close=closes.get(asset.ticker),
+            ))
     return PicksResponse(
         date=latest_date, universe_size=universe, active_count=active, picks=picks
     )
