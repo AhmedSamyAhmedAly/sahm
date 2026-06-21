@@ -152,12 +152,6 @@ export default function PicksView({
               ⚡ catalyst
             </span>
             <span>— not analysed</span>
-            <span className="legend-sep" />
-            <span className="legend-title">Signal</span>
-            <span><span className="badge strong_buy">STRONG BUY</span> / <span className="badge buy">BUY</span></span>
-            <span><span className="badge hold">HOLD</span></span>
-            <span><span className="badge sell">SELL</span> / <span className="badge strong_sell">STRONG SELL</span></span>
-            <span><span className="pill">data only</span> didn’t pass filters — price only, no prediction</span>
           </div>
         )}
 

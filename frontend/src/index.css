@@ -223,8 +223,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .dropdown-item.danger { color: var(--red); }
 
 /* ---------- nav dropdown (e.g. Admin) ---------- */
-.navdrop { position: relative; display: inline-flex; }
+.navdrop { position: relative; display: inline-flex; align-items: center; }
 .navdrop > button.link {
+  display: inline-flex; align-items: center; line-height: 1;
   background: transparent; border: none; cursor: pointer; color: var(--muted);
   font-weight: 600; font-size: 14px; font-family: inherit; padding: 0;
 }
