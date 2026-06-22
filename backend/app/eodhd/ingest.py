@@ -47,21 +47,30 @@ def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
     for ticker in settings.extra_ticker_list:
         if ticker in seen:
             continue
+        # Verify the symbol exists via EOD prices — available on every paid plan
+        # (incl. the $19.99 EOD tier), unlike fundamentals.
+        try:
+            if not client.eod(ticker):
+                continue
+        except Exception:
+            continue  # not a real symbol / no access
+        # Best-effort nicer company name from fundamentals; needs a fundamentals
+        # plan, so on cheaper plans this is skipped and the ticker code stands in.
+        name, atype = None, "common stock"
         try:
             gen = client.fundamentals(ticker).get("General") or {}
+            name = gen.get("Name")
+            atype = (gen.get("Type") or atype).lower()
         except Exception:
-            continue  # not a real symbol / plan lacks access
+            pass
         seen.add(ticker)
         tickers.append(ticker)
-        atype = (gen.get("Type") or "common stock").lower()
         a = existing.get(ticker)
         if a is None:
-            db.add(Asset(
-                ticker=ticker, name=gen.get("Name"), asset_type=atype,
-                exchange=settings.egx_exchange, is_listed=True,
-            ))
+            db.add(Asset(ticker=ticker, name=name, asset_type=atype,
+                         exchange=settings.egx_exchange, is_listed=True))
         else:
-            a.name = gen.get("Name") or a.name
+            a.name = name or a.name
             a.asset_type = atype
             a.is_listed = True
 
