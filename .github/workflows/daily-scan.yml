@@ -3,10 +3,13 @@ name: Daily EGX scan
 # Runs the full pipeline in the cloud against Neon, so picks refresh every
 # trading day before the EGX open (10:00 Cairo). Sun-Thu only.
 on:
+  # GitHub delays/drops runs scheduled on the hour (:00), so we use off-peak
+  # minutes AND a later backup run. The daily job is idempotent (re-scans the
+  # same date, dedupes bars), so running twice in a morning is harmless.
+  # Sun-Thu only. UTC (no DST) — lands ~03:17-08:17 Cairo, before the 10:00 open.
   schedule:
-    # 01:00 UTC = 04:00 Cairo (summer, UTC+3) / 03:00 Cairo (winter, UTC+2), Sun-Thu.
-    # GitHub cron is UTC-only and does not follow DST; this lands at ~3-4am local.
-    - cron: "0 1 * * 0-4"
+    - cron: "17 1 * * 0-4"   # primary  ~01:17 UTC
+    - cron: "17 5 * * 0-4"   # backup   ~05:17 UTC (catches a dropped primary)
   workflow_dispatch: {} # allow manual runs from the Actions tab
 
 jobs:
