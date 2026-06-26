@@ -102,11 +102,12 @@ def ingest_prices(client: EODHDClient, db: Session, tickers: list[str],
         except Exception:
             continue  # one bad symbol shouldn't abort the whole run
 
-        have = {
-            d for (d,) in db.execute(
-                select(DailyBar.date).where(DailyBar.ticker == ticker)
-            ).all()
-        }
+        # Only load the dates we might collide with. On a top-up that's just the
+        # recent window (huge DB-transfer saving vs. reading the whole history).
+        have_q = select(DailyBar.date).where(DailyBar.ticker == ticker)
+        if start is not None:
+            have_q = have_q.where(DailyBar.date >= start)
+        have = {d for (d,) in db.execute(have_q).all()}
         for b in bars:
             try:
                 d = dt.date.fromisoformat(b["date"])

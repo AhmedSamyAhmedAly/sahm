@@ -1,0 +1,27 @@
+name: Weekly retrain
+
+# The heavy job (reads full 16-yr history): recompute backtest hit-rate bands and
+# retrain the ML models. A 16-year model barely moves week to week, so weekly is
+# plenty — and keeping it OFF the nightly path is what keeps DB transfer tiny.
+# Runs Friday (EGX closed Fri/Sat).
+on:
+  schedule:
+    - cron: "23 2 * * 5"   # Fri ~02:23 UTC
+  workflow_dispatch: {}
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+      - name: Backtest + retrain
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m app.cli retrain

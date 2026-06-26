@@ -1,7 +1,8 @@
 name: Daily EGX scan
 
-# Runs the full pipeline in the cloud against Neon, so picks refresh every
-# trading day before the EGX open (10:00 Cairo). Sun-Thu only.
+# LIGHT nightly job: top-up new prices -> grade -> scan (fresh suggestions).
+# No backtest/train here (that's weekly-retrain.yml) -> keeps DB transfer tiny so
+# we stay on the free tier. Runs each trading morning before the 10:00 Cairo open.
 on:
   # GitHub delays/drops runs scheduled on the hour (:00), so we use off-peak
   # minutes AND a later backup run. The daily job is idempotent (re-scans the

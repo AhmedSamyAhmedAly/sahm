@@ -1,0 +1,31 @@
+name: Intraday news refresh
+
+# EGX prices are end-of-day only, so the price signals can't change during the
+# day — but NEWS can. This refreshes only the news overlay (sentiment, catalysts,
+# light re-rank) on the latest scan, a few times during/after market hours.
+# Cheap: shortlist only, tiny DB writes. Sun-Thu.
+on:
+  schedule:
+    - cron: "23 8 * * 0-4"    # ~late morning Cairo
+    - cron: "23 11 * * 0-4"   # ~midday Cairo
+    - cron: "23 14 * * 0-4"   # ~after close Cairo
+  workflow_dispatch: {}
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+      - name: Refresh news overlay
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
+          ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
+        run: python -m app.cli news

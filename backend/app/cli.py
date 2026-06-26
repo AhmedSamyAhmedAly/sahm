@@ -7,7 +7,9 @@
   python -m app.cli train             # train calibrated ML models (accuracy layer)
   python -m app.cli scan              # run the daily scan -> recommendations
   python -m app.cli grade             # grade matured past recommendations
-  python -m app.cli daily             # ingest -> grade -> backtest -> train -> scan
+  python -m app.cli news              # refresh news overlay only (cheap; intraday)
+  python -m app.cli daily             # LIGHT nightly: ingest top-up -> grade -> scan
+  python -m app.cli retrain           # HEAVY weekly: backtest + train
   python -m app.cli demo              # seed -> backtest -> train -> scan (local demo)
   python -m app.cli create-user EMAIL PASSWORD [admin|member]
 """
@@ -19,7 +21,7 @@ from app.config import settings
 from app.database import SessionLocal, init_db
 from app.engine import backtest as bt
 from app.engine import ml
-from app.engine.pipeline import grade_due, run_scan
+from app.engine.pipeline import enrich_news, grade_due, run_scan
 
 
 def _seed():
@@ -28,7 +30,7 @@ def _seed():
         print(seed_synthetic(db))
 
 
-def _ingest():
+def _run_ingest(full_history: bool):
     from app.eodhd.client import EODHDClient
     from app.eodhd.ingest import apply_liquidity_filters, ingest_prices, refresh_assets
     client = EODHDClient()
@@ -40,10 +42,15 @@ def _ingest():
     with SessionLocal() as db:
         tickers = refresh_assets(client, db)
         print(f"assets: {len(tickers)}")
-        inserted = ingest_prices(client, db, tickers, full_history=True)
+        inserted = ingest_prices(client, db, tickers, full_history=full_history)
         print(f"bars inserted: {inserted}")
         active = apply_liquidity_filters(db)
         print(f"active: {active}")
+
+
+def _ingest():
+    """Full history pull — for first-time seeding only (heavy)."""
+    _run_ingest(full_history=True)
 
 
 def _backtest():
@@ -65,6 +72,24 @@ def _scan():
 def _grade():
     with SessionLocal() as db:
         print("graded:", grade_due(db))
+
+
+def _news():
+    """Refresh only the news overlay for the latest scan (cheap; run intraday)."""
+    from sqlalchemy import func, select
+    from app.models import Recommendation
+    with SessionLocal() as db:
+        latest = db.execute(select(func.max(Recommendation.date))).scalar()
+        if latest is None:
+            print("no recommendations yet — run scan first")
+            return
+        print("news refreshed:", enrich_news(db, latest), "for", latest)
+
+
+def _retrain():
+    """Heavy: recompute backtest stats + retrain ML. Run weekly, not nightly."""
+    _backtest()
+    _train()
 
 
 def _create_user(argv: list[str]):
@@ -94,10 +119,10 @@ def _create_user(argv: list[str]):
 
 
 def _daily():
-    _ingest()
+    """Nightly (light): top-up new prices, grade, scan -> fresh suggestions.
+    No backtest/train here — that's `retrain`, run weekly (keeps DB transfer low)."""
+    _run_ingest(full_history=False)
     _grade()
-    _backtest()
-    _train()
     _scan()
 
 
@@ -116,8 +141,10 @@ _COMMANDS = {
     "ingest": _ingest,
     "backtest": _backtest,
     "train": _train,
+    "retrain": _retrain,
     "scan": _scan,
     "grade": _grade,
+    "news": _news,
     "daily": _daily,
     "demo": _demo,
 }

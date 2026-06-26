@@ -22,15 +22,20 @@ from app.engine.signals import ml_signal, score_features
 from app.models import Asset, DailyBar, Outcome, PipelineRun, Recommendation
 
 
-def _load_bars(db: Session, ticker: str) -> pd.DataFrame:
+def _load_bars(db: Session, ticker: str, limit: int = 400) -> pd.DataFrame:
+    """Recent bars only (last `limit`). The scan's indicators need ~210 bars, so
+    pulling the full 16-yr history here is pure wasted DB transfer — keep it light.
+    Full history is only loaded by the (weekly) backtest/train jobs."""
     rows = db.execute(
         select(DailyBar.date, DailyBar.open, DailyBar.high, DailyBar.low,
                DailyBar.close, DailyBar.volume)
         .where(DailyBar.ticker == ticker)
-        .order_by(DailyBar.date)
+        .order_by(DailyBar.date.desc())
+        .limit(limit)
     ).all()
     if not rows:
         return pd.DataFrame()
+    rows = list(reversed(rows))
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
     for c in ("open", "high", "low", "close", "volume"):
         df[c] = pd.to_numeric(df[c], errors="coerce")
