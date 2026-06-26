@@ -1,10 +1,14 @@
 """Push only the SMALL serving slice to Neon (reads the local sahm.db file).
 
 The full 16-year history + all training stay on the free GitHub Actions cache, so
-Neon never takes a bulk read. Each night this pushes just:
-  * recommendations for the latest scan date (replaces that date; ids preserved)
+Neon never takes a bulk read. Each run pushes just:
+  * recommendations for the latest scan date (replaces that date)
   * daily bars newer than what Neon already has (today's bars, for the charts)
   * outcomes that were newly graded (matured past calls)
+
+IDs are NOT preserved — Neon auto-assigns them and outcomes are linked by the
+natural key (date, ticker). That keeps it collision-proof even though the local
+file (built fresh in CI) and Neon (seeded from elsewhere) use different id spaces.
 
     DATABASE_URL=<neon>  python scripts/push_serving.py
 """
@@ -40,6 +44,12 @@ def _insert(engine, table, rows):
                 time.sleep(1.5 * (attempt + 1))
 
 
+def _rec_map(conn) -> dict:
+    """(date, ticker) -> recommendation id, for the given connection."""
+    return {(d, t): i for i, d, t in conn.execute(
+        select(Recommendation.id, Recommendation.date, Recommendation.ticker)).all()}
+
+
 def main() -> None:
     url = os.environ["DATABASE_URL"]
     tgt = create_engine(url, pool_pre_ping=True, insertmanyvalues_page_size=80)
@@ -53,10 +63,8 @@ def main() -> None:
     except Exception:  # noqa: BLE001
         pass
 
-    # What does Neon already have?
     with tgt.connect() as c:
         neon_max_bar = c.execute(select(func.max(DailyBar.date))).scalar()
-        neon_rec_ids = {r for (r,) in c.execute(select(Recommendation.id)).all()}
         neon_oc_recids = {r for (r,) in c.execute(select(Outcome.recommendation_id)).all()}
 
     # Read the small slice from the local file.
@@ -65,40 +73,42 @@ def main() -> None:
         recs = ([dict(r._mapping) for r in s.execute(
             select(Recommendation.__table__).where(Recommendation.date == latest)).all()]
             if latest else [])
+        # local rec id -> (date, ticker), to remap outcome FKs onto Neon's ids
+        local_key = {i: (d, t) for i, d, t in s.execute(
+            select(Recommendation.id, Recommendation.date, Recommendation.ticker)).all()}
+        outcomes = [dict(r._mapping) for r in s.execute(select(Outcome.__table__)).all()]
         if neon_max_bar is None:
             bars = [dict(r._mapping) for r in s.execute(select(DailyBar.__table__)).all()]
         else:
             bars = [dict(r._mapping) for r in s.execute(
                 select(DailyBar.__table__).where(DailyBar.date > neon_max_bar)).all()]
-        outcomes = [dict(r._mapping) for r in s.execute(select(Outcome.__table__)).all()]
 
-    for b in bars:
-        b.pop("id", None)  # no FK references bars; let Neon assign
-
-    # Recommendations: replace just the latest date (ids preserved so outcome FKs
-    # stay valid). Latest-date recs aren't matured, so no outcome references them.
+    # Recommendations: replace just the latest date; drop ids (Neon auto-assigns).
     if recs:
+        for r in recs:
+            r.pop("id", None)
         with tgt.begin() as c:
             c.execute(text("DELETE FROM recommendations WHERE date = :d"), {"d": latest})
         _insert(tgt, Recommendation.__table__, recs)
-        neon_rec_ids |= {r["id"] for r in recs}
-        with tgt.begin() as c:
-            seq = c.execute(text("SELECT pg_get_serial_sequence('recommendations','id')")).scalar()
-            if seq:
-                c.execute(text(
-                    f"SELECT setval('{seq}', (SELECT COALESCE(MAX(id),1) FROM recommendations))"))
 
-    # New bars (today's) — dedup by the unique (ticker,date) is guaranteed because
-    # we only take dates strictly newer than Neon's max.
+    # New bars (today's) — strictly newer than Neon's max, so no (ticker,date) dups.
+    for b in bars:
+        b.pop("id", None)
     if bars:
         _insert(tgt, DailyBar.__table__, bars)
 
-    # Newly graded outcomes whose recommendation already lives in Neon.
-    new_oc = [o for o in outcomes
-              if o["recommendation_id"] not in neon_oc_recids
-              and o["recommendation_id"] in neon_rec_ids]
-    for o in new_oc:
+    # Outcomes: remap local rec id -> (date,ticker) -> Neon rec id; skip existing.
+    with tgt.connect() as c:
+        neon_map = _rec_map(c)
+    new_oc = []
+    for o in outcomes:
+        key = local_key.get(o["recommendation_id"])
+        neon_id = neon_map.get(key) if key else None
+        if neon_id is None or neon_id in neon_oc_recids:
+            continue
         o.pop("id", None)
+        o["recommendation_id"] = neon_id
+        new_oc.append(o)
     if new_oc:
         _insert(tgt, Outcome.__table__, new_oc)
 
