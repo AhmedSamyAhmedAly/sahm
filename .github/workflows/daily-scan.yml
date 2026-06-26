@@ -1,21 +1,23 @@
 name: Daily EGX scan
 
-# LIGHT nightly job: top-up new prices -> grade -> scan (fresh suggestions).
-# No backtest/train here (that's weekly-retrain.yml) -> keeps DB transfer tiny so
-# we stay on the free tier. Runs each trading morning before the 10:00 Cairo open.
+# LIGHT nightly job. The full 16-yr history lives in the GitHub Actions cache (a
+# local SQLite file), so the engine reads it for FREE — Neon only ever takes a
+# tiny incremental write (today's picks + today's bars). This is what keeps us on
+# the free tier indefinitely. Runs each trading morning before the 10:00 Cairo open.
 on:
-  # GitHub delays/drops runs scheduled on the hour (:00), so we use off-peak
-  # minutes AND a later backup run. The daily job is idempotent (re-scans the
-  # same date, dedupes bars), so running twice in a morning is harmless.
-  # Sun-Thu only. UTC (no DST) — lands ~03:17-08:17 Cairo, before the 10:00 open.
+  # GitHub delays/drops on-the-hour runs, so we use off-peak minutes + a backup.
+  # The job is idempotent (re-scans the same date, dedupes bars). Sun-Thu, UTC.
   schedule:
     - cron: "17 1 * * 0-4"   # primary  ~01:17 UTC
-    - cron: "17 5 * * 0-4"   # backup   ~05:17 UTC (catches a dropped primary)
-  workflow_dispatch: {} # allow manual runs from the Actions tab
+    - cron: "17 5 * * 0-4"   # backup   ~05:17 UTC
+  workflow_dispatch: {}      # allow manual runs (also used to first bootstrap)
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write          # manage the history cache
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -25,10 +27,47 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-engine.txt
-      - name: Run daily pipeline
+
+      # Restore the rolling history file (newest sahm-db-* entry). First ever run
+      # misses -> the engine step bootstraps it from EODHD.
+      - name: Restore history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: backend/sahm.db
+          key: sahm-db-${{ github.run_id }}
+          restore-keys: sahm-db-
+
+      - name: Engine on local file (no Neon reads)
+        id: engine
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: "sqlite:///./sahm.db"
           EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
           OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
           ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
-        run: python -m app.cli daily
+        run: |
+          if [ -f sahm.db ]; then
+            python -m app.cli daily
+          else
+            echo "No cached history — bootstrapping from EODHD (one-time)."
+            python -m app.cli ingest
+            python -m app.cli retrain
+            python -m app.cli scan
+            echo "bootstrapped=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push picks + today's bars to Neon (tiny)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/push_serving.py
+
+      - name: Push models to Neon (only after a bootstrap)
+        if: steps.engine.outputs.bootstrapped == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/push_results_to_neon.py
+
+      - name: Save history cache
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm.db
+          key: sahm-db-${{ github.run_id }}

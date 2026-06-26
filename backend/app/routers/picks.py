@@ -1,7 +1,7 @@
 """Picks: the ranked daily recommendations that power the dashboard."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -92,6 +92,7 @@ def list_assets(db: Session = Depends(get_db), user: User = Depends(get_current_
 
 @router.get("/picks", response_model=PicksResponse)
 def get_picks(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     signal: str | None = Query(None, description="filter on the effective signal"),
@@ -101,6 +102,9 @@ def get_picks(
     horizon: int | None = Query(None, description="horizon days for the band, e.g. 10"),
     limit: int = 200,
 ):
+    # Picks change at most once a day, so let the browser reuse its copy for a few
+    # minutes — repeated visits then don't re-read Neon (keeps free-tier transfer low).
+    response.headers["Cache-Control"] = "private, max-age=180"
     latest_date = db.execute(select(func.max(Recommendation.date))).scalar()
     universe = db.execute(
         select(func.count(Asset.id)).where(Asset.is_listed.is_(True))

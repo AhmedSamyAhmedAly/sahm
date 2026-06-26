@@ -1,9 +1,9 @@
 name: Weekly retrain
 
-# The heavy job (reads full 16-yr history): recompute backtest hit-rate bands and
-# retrain the ML models. A 16-year model barely moves week to week, so weekly is
-# plenty — and keeping it OFF the nightly path is what keeps DB transfer tiny.
-# Runs Friday (EGX closed Fri/Sat).
+# The heavy job: recompute the backtest hit-rate bands and retrain the ML models
+# on the FULL 16-yr history. That history is read from the GitHub Actions cache
+# (a local SQLite file), so it costs ZERO Neon transfer — only the small trained
+# models + bands are written to Neon. Runs Friday (EGX closed Fri/Sat).
 on:
   schedule:
     - cron: "23 2 * * 5"   # Fri ~02:23 UTC
@@ -12,6 +12,9 @@ on:
 jobs:
   retrain:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
     defaults:
       run:
         working-directory: backend
@@ -21,7 +24,32 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements-engine.txt
-      - name: Backtest + retrain
+
+      - name: Restore history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: backend/sahm.db
+          key: sahm-db-${{ github.run_id }}
+          restore-keys: sahm-db-
+
+      - name: Backtest + retrain on local file (no Neon reads)
+        env:
+          DATABASE_URL: "sqlite:///./sahm.db"
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+        run: |
+          if [ ! -f sahm.db ]; then
+            echo "No cached history — building it from EODHD first."
+            python -m app.cli ingest
+          fi
+          python -m app.cli retrain
+
+      - name: Push models + bands to Neon (small)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python -m app.cli retrain
+        run: python scripts/push_results_to_neon.py
+
+      - name: Save history cache
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm.db
+          key: sahm-db-${{ github.run_id }}

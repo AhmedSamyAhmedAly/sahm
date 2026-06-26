@@ -19,20 +19,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, insert, select, text  # noqa: E402
 
 from app.database import Base  # noqa: E402
-from app.models import (  # noqa: E402
-    BacktestStat,
-    ModelVersion,
-    Outcome,
-    Recommendation,
-)
+from app.models import BacktestStat, ModelVersion  # noqa: E402
 
 SRC = "sqlite:///./sahm.db"
 BATCH = 300
 
-# (model, tablename) in FK-safe INSERT order; DELETE happens in reverse.
+# Weekly training outputs only — these are small and replaced wholesale. The
+# (large) recommendations / bars / outcomes are handled incrementally by
+# push_serving.py so Neon never takes a bulk write.
 TABLES = [
-    (Recommendation, "recommendations"),
-    (Outcome, "outcomes"),
     (BacktestStat, "backtest_stats"),
     (ModelVersion, "model_versions"),
 ]
