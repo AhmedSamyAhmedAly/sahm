@@ -51,8 +51,17 @@ _INSTRUCTIONS = (
 )
 
 
+def _is_trusted(source: str, source_url: str) -> bool:
+    """True if the publisher is on the trusted whitelist (by name or domain)."""
+    if not settings.news_trusted_only:
+        return True
+    hay = f"{(source or '').lower()} {(source_url or '').lower()}"
+    return any(tok in hay for tok in settings.news_trusted_list)
+
+
 def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]:
-    """Google News RSS in each configured language. Returns deduped recent items."""
+    """Google News RSS in each configured language. Returns deduped recent items,
+    filtered to trusted publishers only (when news_trusted_only is on)."""
     code = ticker.split(".")[0]
     company = (name or code).strip()
     queries = {
@@ -76,13 +85,18 @@ def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]
             title = (item.findtext("title") or "").strip()
             if not title or title.lower() in seen:
                 continue
-            seen.add(title.lower())
             src = item.find("source")
+            source = (src.text.strip() if src is not None and src.text else "")
+            source_url = (src.get("url") if src is not None else "") or ""
+            if not _is_trusted(source, source_url):
+                continue  # drop untrusted publishers entirely
+            seen.add(title.lower())
             items.append({
                 "title": title,
                 "url": (item.findtext("link") or "").strip(),
                 "date": (item.findtext("pubDate") or "").strip(),
-                "source": (src.text.strip() if src is not None and src.text else ""),
+                "source": source,
+                "source_url": source_url,
                 "lang": lang,
             })
             if len(items) >= limit:

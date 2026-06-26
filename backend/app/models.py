@@ -174,7 +174,7 @@ class Recommendation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     date: Mapped[dt.date] = mapped_column(Date, nullable=False, index=True)
     ticker: Mapped[str] = mapped_column(String(32), ForeignKey("assets.ticker"), nullable=False)
-    signal: Mapped[str] = mapped_column(String(16))  # strong_buy|buy|hold|sell|strong_sell
+    signal: Mapped[str] = mapped_column(String(24))  # (super_)strong_buy|buy|hold|sell|(super_)strong_sell
     score: Mapped[float] = mapped_column(Float)  # 0-100 opportunity score
     success_prob: Mapped[float | None] = mapped_column(Float)  # backtested hit-rate (0-1)
     success_n: Mapped[int | None] = mapped_column(Integer)  # sample size behind the prob

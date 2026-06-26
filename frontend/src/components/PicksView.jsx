@@ -4,8 +4,9 @@ import { api } from "../api.js";
 import { SIGNAL_LABEL, money, prob } from "../format.js";
 
 const BANDS = [
-  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
+  { key: "auto", label: "Auto — best play (≥60% confident)", target: null, horizon: null },
   { key: "t5_h10", label: "Target: +5% in 10d", target: 0.05, horizon: 10 },
+  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
   { key: "t15_h20", label: "Target: +15% in 20d", target: 0.15, horizon: 20 },
   { key: "t20_h20", label: "Target: +20% in 20d", target: 0.2, horizon: 20 },
 ];
@@ -45,8 +46,9 @@ export default function PicksView({
   const [band, setBand] = useState(BANDS[0]);
 
   useEffect(() => {
-    api.picks({ limit: 400, target: band.target, horizon: band.horizon })
-      .then(setData).catch((e) => setErr(e.message));
+    const params = { limit: 400 };
+    if (band.target != null) { params.target = band.target; params.horizon = band.horizon; }
+    api.picks(params).then(setData).catch((e) => setErr(e.message));
   }, [band]);
 
   useEffect(() => {
@@ -56,7 +58,8 @@ export default function PicksView({
   const rows = useMemo(() => {
     if (!data) return [];
     let r = data.picks;
-    if (suggestionsOnly) r = r.filter((p) => p.signal === "buy" || p.signal === "strong_buy");
+    if (suggestionsOnly)
+      r = r.filter((p) => p.signal === "buy" || p.signal === "strong_buy" || p.signal === "super_strong_buy");
     if (signal) r = r.filter((p) => p.signal === signal);
     if (q) {
       const s = q.toLowerCase();
@@ -81,7 +84,9 @@ export default function PicksView({
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
 
-  const strongBuys = data.picks.filter((p) => p.signal === "strong_buy").length;
+  const strongBuys = data.picks.filter(
+    (p) => p.signal === "strong_buy" || p.signal === "super_strong_buy").length;
+  const superBuys = data.picks.filter((p) => p.signal === "super_strong_buy").length;
   const winRate = track?.live_win_rate;
 
   return (
@@ -89,7 +94,7 @@ export default function PicksView({
       {showKpis && (
         <div className="kpis">
           <Kpi label="Stocks scanned" value={data.active_count} />
-          <Kpi label="Strong buys today" value={strongBuys} />
+          <Kpi label="Strong buys today" value={superBuys ? `${strongBuys} · ${superBuys} super` : strongBuys} />
           <Kpi label="Live win rate" value={winRate == null ? "—" : `${Math.round(winRate * 100)}%`} />
           <Kpi label="Last update" value={data.date || "—"} />
         </div>
@@ -111,17 +116,20 @@ export default function PicksView({
               {suggestionsOnly ? (
                 <>
                   <option value="">All buys</option>
+                  <option value="super_strong_buy">Super strong buy</option>
                   <option value="strong_buy">Strong buy</option>
                   <option value="buy">Buy</option>
                 </>
               ) : (
                 <>
                   <option value="">All signals</option>
+                  <option value="super_strong_buy">Super strong buy</option>
                   <option value="strong_buy">Strong buy</option>
                   <option value="buy">Buy</option>
                   <option value="hold">Hold</option>
                   <option value="sell">Sell</option>
                   <option value="strong_sell">Strong sell</option>
+                  <option value="super_strong_sell">Super strong sell</option>
                 </>
               )}
             </select>
@@ -208,7 +216,14 @@ export default function PicksView({
                     </td>
                     <td className="prob" data-label="Success"><b>{prob(p.success_prob)}</b></td>
                     <td className="num" data-label="Entry">{money(p.entry_price ?? p.last_close)}</td>
-                    <td className="num up" data-label="Target">{money(p.target_price)}</td>
+                    <td className="num up" data-label="Target">
+                      {money(p.target_price)}
+                      {p.target_pct ? (
+                        <small style={{ display: "block", color: "var(--muted)" }}>
+                          +{Math.round(p.target_pct * 100)}% / {p.horizon_days}d
+                        </small>
+                      ) : null}
+                    </td>
                     <td className="num down" data-label="Stop">{money(p.stop_loss)}</td>
                     <td className="num hide-sm" data-label="R:R">{p.risk_reward ?? "—"}</td>
                     <td className="num hide-sm" data-label="Hold">

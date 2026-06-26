@@ -1,9 +1,11 @@
 export const SIGNAL_LABEL = {
+  super_strong_buy: "SUPER STRONG BUY",
   strong_buy: "STRONG BUY",
   buy: "BUY",
   hold: "HOLD",
   sell: "SELL",
   strong_sell: "STRONG SELL",
+  super_strong_sell: "SUPER STRONG SELL",
 };
 
 export const money = (x) =>

@@ -42,9 +42,10 @@ def band_override(rec: Recommendation, target: float | None, horizon: int | None
     stop = float(rec.stop_loss) if rec.stop_loss is not None else None
     tp = round(entry * (1 + target), 4) if entry else None
     rr = round((tp - entry) / (entry - stop), 2) if (entry and stop and entry > stop) else None
+    # NB: the rating (signal) stays fixed — switching the target band only changes
+    # the profit target and its hit-probability, not the conviction rating.
     return {
         "success_prob": bp.get("prob"), "success_n": bp.get("n"),
-        "signal": bp.get("signal") or rec.signal,
         "target_pct": target, "horizon_days": horizon,
         "expected_hold": bp.get("hold"), "target_price": tp, "risk_reward": rr,
     }

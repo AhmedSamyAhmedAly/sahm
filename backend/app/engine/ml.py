@@ -30,15 +30,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.engine.indicators import add_indicators, feature_row, MIN_BARS
+from app.engine.market import MARKET_FEATURES, compute_market_frame
 from app.models import Asset, DailyBar, ModelVersion
 
-# Numeric, cross-sectionally comparable features (no raw price levels).
-ML_FEATURES = [
+# Numeric, cross-sectionally comparable single-stock features (no raw price levels).
+TECH_FEATURES = [
     "price_vs_sma20", "price_vs_sma50", "price_vs_sma200", "sma50_vs_sma200",
     "rsi14", "macd_hist", "roc10", "roc20", "vol_ratio", "atr_pct",
     "dist_from_high20", "pos_52w", "breakout20", "golden_cross",
 ]
-FEATURE_SET_VERSION = "1"
+# Full vector = single-stock technicals + market context (regime/breadth/rel-strength).
+ML_FEATURES = TECH_FEATURES + MARKET_FEATURES
+FEATURE_SET_VERSION = "2"   # v2 adds market-context features
 MIN_SAMPLES = 800
 
 
@@ -46,9 +49,9 @@ def band_key(target_pct: float, horizon: int) -> str:
     return f"t{int(round(target_pct * 100))}_h{horizon}"
 
 
-def feats_to_vector(feats: dict) -> list[float]:
+def feats_to_vector(feats: dict, keys: list[str] | None = None) -> list[float]:
     out = []
-    for k in ML_FEATURES:
+    for k in (keys or ML_FEATURES):
         v = feats.get(k)
         if isinstance(v, bool):
             out.append(1.0 if v else 0.0)
@@ -74,7 +77,11 @@ def _load_bars(db: Session, ticker: str) -> pd.DataFrame:
 
 
 def build_matrix(db: Session, horizons: list[int]) -> pd.DataFrame:
-    """One row per (ticker, day) with ML features + forward max-high per horizon."""
+    """One row per (ticker, day) with ML features + forward max-high per horizon.
+
+    Single-stock technicals are computed per ticker; market-context features are
+    joined in by date afterwards (one shared market series for the whole universe).
+    """
     max_h = max(horizons)
     frames: list[pd.DataFrame] = []
     tickers = db.execute(select(Asset.ticker).where(Asset.is_active.is_(True))).scalars().all()
@@ -93,7 +100,7 @@ def build_matrix(db: Session, horizons: list[int]) -> pd.DataFrame:
             feats = feature_row(df_ind, i)
             if not feats:
                 continue
-            row = {k: v for k, v in zip(ML_FEATURES, feats_to_vector(feats))}
+            row = dict(zip(TECH_FEATURES, feats_to_vector(feats, TECH_FEATURES)))
             row["date"] = dates[i]
             row["close"] = close[i]
             for h in horizons:
@@ -103,7 +110,17 @@ def build_matrix(db: Session, horizons: list[int]) -> pd.DataFrame:
             frames.append(pd.DataFrame(recs))
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True).sort_values("date").reset_index(drop=True)
+    matrix = pd.concat(frames, ignore_index=True).sort_values("date").reset_index(drop=True)
+
+    # Join the shared market series by date and derive relative strength.
+    mframe = compute_market_frame(db)
+    if not mframe.empty:
+        matrix = matrix.merge(mframe, left_on="date", right_index=True, how="left")
+        matrix["rel_strength"] = matrix["roc20"] - matrix["mkt_roc20"]
+    for col in MARKET_FEATURES:
+        if col not in matrix.columns:
+            matrix[col] = np.nan
+    return matrix
 
 
 def _make_estimator(algo: str):

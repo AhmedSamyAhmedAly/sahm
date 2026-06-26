@@ -70,6 +70,15 @@ tbody tr:hover { background: var(--card-2); }
 .badge.buy { background: rgba(74,168,255,0.14); color: var(--blue); }
 .badge.hold { background: rgba(241,196,15,0.14); color: var(--amber); }
 .badge.sell, .badge.strong_sell { background: var(--red-soft); color: var(--red); }
+/* highest-conviction tiers — solid fill + soft glow so they stand out */
+.badge.super_strong_buy {
+  background: var(--green); color: #04130b; font-weight: 800;
+  box-shadow: 0 0 0 1px var(--green), 0 0 10px rgba(46,204,113,0.55);
+}
+.badge.super_strong_sell {
+  background: var(--red); color: #1a0606; font-weight: 800;
+  box-shadow: 0 0 0 1px var(--red), 0 0 10px rgba(231,76,60,0.5);
+}
 
 .prob { font-weight: 800; }
 .prob b { font-size: 15px; }

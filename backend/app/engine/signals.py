@@ -110,24 +110,42 @@ def score_features(f: dict) -> dict:
     }
 
 
+# Ordered worst -> best, so a tier can be nudged up/down by index.
+SIGNAL_ORDER = [
+    "super_strong_sell", "strong_sell", "sell", "hold", "buy",
+    "strong_buy", "super_strong_buy",
+]
+
+
+def _shift(signal: str, by: int) -> str:
+    """Move a signal up (+) or down (-) the tier ladder, clamped to the ends."""
+    try:
+        i = SIGNAL_ORDER.index(signal)
+    except ValueError:
+        return signal
+    return SIGNAL_ORDER[max(0, min(len(SIGNAL_ORDER) - 1, i + by))]
+
+
 def signal_for(score: float) -> str:
-    if score >= 80:
+    """Pure rule-score tier (used when no ML model is trained yet)."""
+    if score >= 88:
+        return "super_strong_buy"
+    if score >= 78:
         return "strong_buy"
-    if score >= 65:
+    if score >= 63:
         return "buy"
     if score >= 45:
         return "hold"
     if score >= 30:
         return "sell"
-    return "strong_sell"
+    if score >= 18:
+        return "strong_sell"
+    return "super_strong_sell"
 
 
 def ml_signal(prob: float, base_rate: float | None) -> str:
-    """Signal from a calibrated probability, relative to the market baseline.
-
-    Using the base rate keeps it honest: 'strong buy' means the model thinks this
-    stock is ~1.5x more likely than average to hit the target.
-    """
+    """Plain ML tier from prob-vs-baseline ratio (no confluence). Kept for callers
+    that only have a probability; the scan uses `decide_signal` for the real gating."""
     base = base_rate or 0.33
     ratio = prob / base if base > 0 else 1.0
     if ratio >= 1.5:
@@ -139,6 +157,92 @@ def ml_signal(prob: float, base_rate: float | None) -> str:
     if ratio >= 0.6:
         return "sell"
     return "strong_sell"
+
+
+def decide_signal(
+    prob: float | None,
+    base_rate: float | None,
+    score: float,
+    feats: dict,
+) -> tuple[str, list[str]]:
+    """The real signal decision: ML conviction + rule-score + confluence + market
+    regime. Returns (signal, extra_reasons). Upgrades to SUPER only when several
+    independent confirmations agree, and demotes buys in a down market.
+    """
+    from app.config import settings
+
+    reasons: list[str] = []
+    if prob is None:
+        return signal_for(score), reasons
+
+    base = base_rate or 0.33
+    ratio = prob / base if base > 0 else 1.0
+
+    # Base tier from the model's edge over the market base-rate.
+    if ratio >= settings.strong_ratio_min:
+        sig = "strong_buy"
+    elif ratio >= settings.buy_ratio_min:
+        sig = "buy"
+    elif ratio >= settings.hold_ratio_min:
+        sig = "hold"
+    elif ratio >= settings.sell_ratio_min:
+        sig = "sell"
+    else:
+        sig = "strong_sell"
+
+    rsi = feats.get("rsi14")
+    vol_ratio = feats.get("vol_ratio")
+    regime = feats.get("mkt_above_sma50")          # 1.0 / 0.0 / None
+    breadth = feats.get("mkt_breadth")
+    rel = feats.get("rel_strength")
+
+    overbought = rsi is not None and rsi > settings.overbought_rsi
+    vol_ok = vol_ratio is None or vol_ratio >= settings.super_vol_min
+    regime_up = regime is None or regime >= 0.5    # unknown -> don't block
+    regime_down = regime is not None and regime < 0.5
+
+    # --- upgrade to SUPER STRONG BUY on confluence ---
+    if (sig == "strong_buy" and ratio >= settings.super_ratio_min
+            and score >= settings.super_score_min and vol_ok and not overbought
+            and regime_up and (rel is None or rel >= 0)):
+        sig = "super_strong_buy"
+        reasons.append("High conviction: model, trend, volume and market all aligned")
+
+    # --- upgrade to SUPER STRONG SELL (symmetric) ---
+    if (sig == "strong_sell" and ratio <= settings.super_sell_ratio_max
+            and score <= settings.super_sell_score_max
+            and (regime_down or (rel is not None and rel < 0))):
+        sig = "super_strong_sell"
+        reasons.append("Strong avoid: weak model odds, broken trend, soft market")
+
+    # --- market-regime demotion: don't issue top buys into a falling market ---
+    if settings.market_regime_gate and regime_down and sig in ("super_strong_buy", "strong_buy"):
+        sig = _shift(sig, -1)
+        reasons.append("Market below its 50-day average — buy conviction lowered")
+
+    # --- overbought caution on any remaining buy ---
+    if overbought and sig in ("super_strong_buy", "strong_buy"):
+        sig = _shift(sig, -1)
+        reasons.append(f"Overbought (RSI {rsi:.0f}) — buy conviction lowered")
+
+    if sig in ("super_strong_buy", "strong_buy") and breadth is not None and breadth >= 60:
+        reasons.append(f"Broad market participation ({breadth:.0f}% above 50-day)")
+
+    return sig, reasons
+
+
+def news_demote(signal: str, news_label: str | None, risk_flag: bool) -> tuple[str, str | None]:
+    """Lower a buy when trusted news is clearly negative / risk-flagged.
+    Returns (signal, reason_or_None). Never upgrades on positive news (the model,
+    not headlines, owns the upside; news only protects against walking into trouble).
+    """
+    if signal not in ("super_strong_buy", "strong_buy", "buy"):
+        return signal, None
+    if news_label == "negative" and risk_flag:
+        return _shift(signal, -2), "Negative news + risk flag — buy downgraded"
+    if news_label == "negative" or risk_flag:
+        return _shift(signal, -1), "Cautious on negative news — buy downgraded"
+    return signal, None
 
 
 def score_band(score: float) -> str:

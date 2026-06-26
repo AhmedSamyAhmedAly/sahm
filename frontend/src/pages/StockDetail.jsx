@@ -149,8 +149,9 @@ export default function StockDetail() {
               )}
             </ul>
             <p className="disclaimer" style={{ marginTop: 8 }}>
-              Live news signal — <b>separate from the backtested Success %</b>. It nudges ranking
-              slightly and flags catalysts; it does not change the model's probability.
+              Live news signal — <b>separate from the backtested Success %</b>. Headlines are limited
+              to <b>trusted financial publishers</b>; clearly negative or risk‑flagged news lowers the
+              buy signal, and strong recent events are flagged as catalysts.
             </p>
           </div>
         </>

@@ -8,11 +8,13 @@ import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
 
 // For stocks you already own, a buy signal means "add to the position".
 const HOLDING_SIGNAL_LABEL = {
+  super_strong_buy: "SUPER BUY MORE",
   strong_buy: "STRONG BUY MORE",
   buy: "BUY MORE",
   hold: "HOLD",
   sell: "SELL",
   strong_sell: "STRONG SELL",
+  super_strong_sell: "SUPER STRONG SELL",
 };
 
 function Kpi({ label, value, cls }) {

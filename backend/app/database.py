@@ -50,8 +50,19 @@ def _column_migrations() -> list[tuple[str, str, str]]:
     ]
 
 
+def _type_migrations() -> list[tuple[str, str, str]]:
+    """Idempotent widen-column migrations (Postgres only; SQLite ignores varchar
+    length so it's a no-op there). (table, column, new_type)."""
+    if engine.dialect.name == "sqlite":
+        return []
+    return [
+        # super_strong_sell is 17 chars — the old VARCHAR(16) can't hold it.
+        ("recommendations", "signal", "VARCHAR(24)"),
+    ]
+
+
 def ensure_schema() -> None:
-    """create_all + idempotent ADD COLUMN migrations. Safe to call on every
+    """create_all + idempotent ADD COLUMN / widen migrations. Safe to call on every
     startup; lets a plain `git push` deploy migrate itself (no manual step)."""
     init_db()
     for table, col, coltype in _column_migrations():
@@ -65,6 +76,14 @@ def ensure_schema() -> None:
             msg = str(e).lower()
             if "exist" not in msg and "duplicate" not in msg:
                 log.warning("schema: could not add %s.%s: %s", table, col, e)
+    for table, col, coltype in _type_migrations():
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ALTER COLUMN {col} TYPE {coltype}"))
+            log.info("schema: widened %s.%s -> %s", table, col, coltype)
+        except Exception as e:  # noqa: BLE001
+            log.warning("schema: could not widen %s.%s: %s", table, col, e)
 
 
 def get_db() -> Iterator[Session]:
