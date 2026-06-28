@@ -83,8 +83,7 @@ export default function Login() {
         <p className="disclaimer">
           Educational/research tool — <b>not financial advice</b>. Signals are transparent
           algorithmic estimates that <b>may be inaccurate</b>; trading carries risk of loss. You
-          decide and execute every trade. By continuing you agree to our{" "}
-          <a href="/terms">Terms</a> &amp; <a href="/privacy">Privacy</a>.
+          decide and execute every trade.
         </p>
       </div>
     </div>

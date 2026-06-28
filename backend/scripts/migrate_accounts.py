@@ -1,8 +1,8 @@
-"""Copy accounts + portfolios from the OLD Neon DB to the NEW one.
+"""Copy accounts from the OLD Neon DB to the NEW one.
 
-Small tables only (users, holdings, sales, contact messages, watchlist), so this
-stays well under any transfer quota on the old DB. IDs are preserved to keep all
-FK links intact, then Postgres sequences are bumped past the max id.
+Small tables only (users, watchlist), so this stays well under any transfer quota
+on the old DB. IDs are preserved to keep all FK links intact, then Postgres
+sequences are bumped past the max id.
 
     OLD_DATABASE_URL=<old neon>  DATABASE_URL=<new neon>  python scripts/migrate_accounts.py
 """
@@ -18,21 +18,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, insert, select, text  # noqa: E402
 
 from app.database import Base  # noqa: E402
-from app.models import (  # noqa: E402
-    ContactMessage,
-    Holding,
-    Sale,
-    User,
-    WatchlistItem,
-)
+from app.models import User, WatchlistItem  # noqa: E402
 
 # FK-safe INSERT order; DELETE runs in reverse.
 TABLES = [
     (User, "users"),
-    (Holding, "holdings"),
-    (Sale, "sales"),
     (WatchlistItem, "watchlist_items"),
-    (ContactMessage, "contact_messages"),
 ]
 
 

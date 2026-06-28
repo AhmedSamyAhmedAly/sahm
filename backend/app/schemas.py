@@ -25,9 +25,6 @@ class AdminUserOut(BaseModel):
     role: str
     is_active: bool
     is_primary: bool = False   # the protected bootstrap admin (ADMIN_EMAIL)
-    first_name: str | None = None
-    last_name: str | None = None
-    mobile: str | None = None
     created_at: dt.datetime | None = None
     last_login_at: dt.datetime | None = None
 
@@ -36,17 +33,6 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str
     role: str = "member"
-    first_name: str | None = None
-    last_name: str | None = None
-    mobile: str | None = None
-
-
-class ProfileUpdate(BaseModel):
-    email: EmailStr | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    mobile: str | None = None
-    avatar: str | None = None   # data URL (base64) or "" to clear
 
 
 class UpdateUserRequest(BaseModel):
@@ -55,126 +41,7 @@ class UpdateUserRequest(BaseModel):
     password: str | None = None
 
 
-# ---- portfolio ----
-class HoldingIn(BaseModel):
-    ticker: str
-    buy_price: float
-    quantity: float
-    deduct: bool = False   # subtract cost from the user's liquid budget
-
-
-class HoldingOut(BaseModel):
-    id: int
-    ticker: str
-    name: str | None = None
-    buy_price: float
-    quantity: float
-    invested: float
-    current_price: float | None = None
-    current_value: float | None = None
-    pnl: float | None = None
-    pnl_pct: float | None = None
-    signal: str | None = None
-    success_prob: float | None = None
-    target_price: float | None = None   # suggested target sell price
-    stop_loss: float | None = None
-    alert: str | None = None          # sell reason: "Take profit" | "Stop loss"
-    sell_suggested: bool = False
-    from_budget: bool = False         # cost was subtracted from liquid budget
-    sold_qty: float = 0
-    avg_sell_price: float | None = None
-    realized_pnl: float = 0
-
-
-class HoldingUpdate(BaseModel):
-    buy_price: float | None = None
-    quantity: float | None = None
-
-
-class BulkHoldingsIn(BaseModel):
-    items: list[HoldingIn]
-
-
-class BulkResult(BaseModel):
-    added: int
-    skipped: int
-    errors: list[str] = []
-
-
-class PortfolioResponse(BaseModel):
-    budget: float | None = None
-    invested: float = 0
-    current_value: float = 0
-    pnl: float = 0                 # unrealized P/L on open holdings
-    pnl_pct: float | None = None
-    realized_pnl: float = 0        # banked from sells
-    earnings: float = 0            # realized + unrealized
-    holdings: list[HoldingOut] = []
-
-
-class BudgetIn(BaseModel):
-    budget: float
-
-
-class SellIn(BaseModel):
-    sell_price: float
-    units: float
-
-
-class SaleOut(BaseModel):
-    id: int
-    holding_id: int
-    ticker: str
-    name: str | None = None
-    units: float
-    sell_price: float
-    buy_price: float
-    gain: float
-    proceeds: float
-    created_at: dt.datetime | None = None
-
-
-class SaleUpdate(BaseModel):
-    sell_price: float | None = None
-    units: float | None = None
-
-
-class ContactIn(BaseModel):
-    title: str
-    description: str | None = None
-    contact: str | None = None     # email or mobile to reply to
-    attachments: list[dict] = []   # [{name, type, data(base64)}]
-
-
-class ContactMessageOut(BaseModel):
-    id: int
-    email: str | None = None
-    contact: str | None = None
-    title: str
-    description: str | None = None
-    attachments: list[dict] = []
-    resolved: bool = False
-    created_at: dt.datetime | None = None
-
-
-class AllocationItem(BaseModel):
-    ticker: str
-    name: str | None = None
-    signal: str
-    success_prob: float | None = None
-    suggested_amount: float
-    shares: int
-    entry_price: float | None = None
-    target_price: float | None = None
-
-
-class AllocationResponse(BaseModel):
-    budget: float
-    leftover_cash: float
-    allocations: list[AllocationItem] = []
-    note: str
-
-
+# ---- admin stats ----
 class AdminStats(BaseModel):
     total_users: int
     active_users: int
@@ -191,11 +58,6 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     email: str
     role: str
-    budget: float | None = None   # so the SPA can gate on "budget set"
-    first_name: str | None = None
-    last_name: str | None = None
-    mobile: str | None = None
-    avatar: str | None = None
 
 
 # ---- picks / stocks ----

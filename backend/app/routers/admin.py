@@ -15,9 +15,9 @@ from app.auth import hash_password, role_for_email
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
-from app.models import Asset, ContactMessage, DailyBar, Recommendation, User
+from app.models import Asset, DailyBar, Recommendation, User
 from app.schemas import (
-    AdminStats, AdminUserOut, ContactMessageOut, CreateUserRequest, UpdateUserRequest,
+    AdminStats, AdminUserOut, CreateUserRequest, UpdateUserRequest,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -31,7 +31,6 @@ def _to_out(u: User) -> AdminUserOut:
     return AdminUserOut(
         id=u.id, email=u.email, role=u.role, is_active=u.is_active,
         is_primary=_is_the_admin(u.email),
-        first_name=u.first_name, last_name=u.last_name, mobile=u.mobile,
         created_at=u.created_at, last_login_at=u.last_login_at,
     )
 
@@ -52,9 +51,7 @@ def create_user(req: CreateUserRequest, db: Session = Depends(get_db),
         raise HTTPException(status_code=409, detail="Email already registered")
     # Role is pinned by email — ignore any attempt to create another admin.
     user = User(email=email, hashed_password=hash_password(req.password),
-                role=role_for_email(email), is_active=True,
-                first_name=(req.first_name or None), last_name=(req.last_name or None),
-                mobile=(req.mobile or None))
+                role=role_for_email(email), is_active=True)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -105,42 +102,6 @@ def delete_user(user_id: int, db: Session = Depends(get_db),
     db.delete(user)
     db.commit()
     return {"deleted": user_id}
-
-
-@router.get("/messages", response_model=list[ContactMessageOut])
-def list_messages(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    rows = db.execute(
-        select(ContactMessage).order_by(ContactMessage.created_at.desc())
-    ).scalars().all()
-    return [
-        ContactMessageOut(
-            id=m.id, email=m.email, contact=m.contact, title=m.title, description=m.description,
-            attachments=m.attachments or [], resolved=m.resolved, created_at=m.created_at,
-        )
-        for m in rows
-    ]
-
-
-@router.post("/messages/{message_id}/resolve")
-def resolve_message(message_id: int, db: Session = Depends(get_db),
-                    _: User = Depends(require_admin)):
-    m = db.get(ContactMessage, message_id)
-    if m is None:
-        raise HTTPException(status_code=404, detail="Message not found")
-    m.resolved = not m.resolved
-    db.commit()
-    return {"resolved": m.resolved}
-
-
-@router.delete("/messages/{message_id}")
-def delete_message(message_id: int, db: Session = Depends(get_db),
-                   _: User = Depends(require_admin)):
-    m = db.get(ContactMessage, message_id)
-    if m is None:
-        raise HTTPException(status_code=404, detail="Message not found")
-    db.delete(m)
-    db.commit()
-    return {"deleted": message_id}
 
 
 @router.get("/stats", response_model=AdminStats)

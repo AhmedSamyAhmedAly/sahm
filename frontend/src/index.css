@@ -143,78 +143,11 @@ input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
-/* clean theme-matched stepper (NumberInput component) */
-.numfield { position: relative; display: block; }
-.numfield > input { width: 100%; padding-right: 36px; }
-.numsteps {
-  position: absolute; top: 4px; right: 4px; bottom: 4px; width: 28px;
-  display: flex; flex-direction: column; gap: 2px; pointer-events: none;
-}
-.numsteps > button {
-  flex: 1; min-height: 0; display: grid; place-items: center; padding: 0;
-  background: var(--card-2); color: var(--muted); border: 1px solid var(--border);
-  border-radius: 6px; font-size: 8px; line-height: 1; cursor: pointer; pointer-events: auto;
-  transition: color .12s, border-color .12s, background .12s;
-}
-.numsteps > button:hover { color: var(--accent); border-color: var(--accent); background: var(--bg-soft); }
-.numsteps > button:active { transform: translateY(0.5px); }
-
-/* ---------- checkbox row (e.g. "deduct from budget") ---------- */
-.checkrow {
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
-  color: var(--text); font-size: 13px; user-select: none;
-}
-.checkrow input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
-
-/* ---------- holdings: clean fitted table, no horizontal scroll ---------- */
-.holdings { table-layout: auto; }
-/* top-align so single-line numbers (Bought/Now/Target) line up with the P/L
-   number, which stacks a percent beneath it */
-.holdings td, .holdings th { padding: 14px 12px; white-space: normal; vertical-align: top; }
-/* keep signal pills on one tidy line (e.g. "STRONG BUY MORE") so they don't
-   wrap mid-cell and stretch the row */
-.holdings .badge { white-space: nowrap; font-size: 10px; padding: 3px 8px; letter-spacing: 0.2px; }
-.holdings td.num { text-align: right; }
-.holdings .pl-main { display: block; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
-.holdings .pl-sub { display: block; text-align: right; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.holdings .alertline { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 600; }
-.holdings .alertline.warn { color: var(--red); }
-.holdings .alertline.good { color: var(--green); }
-.holdings .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
-.holdings .acts button { padding: 6px 10px; font-size: 13px; }
 .iconbtn {
   background: transparent; border: 1px solid var(--border); color: var(--muted);
   border-radius: 8px; padding: 7px 12px; cursor: pointer; font-weight: 600; font-size: 13px;
 }
 .iconbtn:hover { color: var(--text); border-color: var(--accent); }
-
-/* ---------- modal (onboarding + sell history) ---------- */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(4, 7, 12, 0.72);
-  display: grid; place-items: center; z-index: 60; padding: 16px;
-  backdrop-filter: blur(2px);
-}
-.modal {
-  width: 100%; background: var(--card); border: 1px solid var(--border);
-  border-radius: 16px; padding: 24px; max-height: 92vh; overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
-}
-.modal h2, .modal h3 { margin-top: 0; }
-.steps-dots { display: flex; gap: 6px; margin-bottom: 16px; }
-.steps-dots i { width: 26px; height: 4px; border-radius: 999px; background: var(--border); }
-.steps-dots i.on { background: var(--accent); }
-.onb-feature { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0; }
-.onb-feature .ic { font-size: 22px; line-height: 1.2; }
-.onb-feature b { display: block; margin-bottom: 2px; }
-.onb-feature span { color: var(--muted); font-size: 13px; }
-.modal-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
-.modal-actions .grow { flex: 1; }
-.helpbtn {
-  background: var(--card-2); border: 1px solid var(--border); color: var(--muted);
-  width: 30px; height: 30px; border-radius: 999px; cursor: pointer; font-weight: 800;
-  display: grid; place-items: center; font-size: 14px;
-}
-.helpbtn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* ---------- legend (News / Signal key under the toolbar) ---------- */
 .legend {

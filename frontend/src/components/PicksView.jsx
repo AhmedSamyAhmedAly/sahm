@@ -261,8 +261,7 @@ export default function PicksView({
           ? "Browse the full EGX universe. Tap a stock for details. "
           : "Success is the historical, backtested/ML hit-rate for stocks in the same score band — not a guarantee. "}
         Stocks marked <b>“data only”</b> didn’t pass our liquidity/history filters, so we show their
-        latest price but make <b>no prediction</b> for them. Sell/hold signals for stocks you own
-        appear on your Portfolio. Educational/research tool, <b>not financial advice</b>.
+        latest price but make <b>no prediction</b> for them. Educational/research tool, <b>not financial advice</b>.
       </p>
     </div>
   );

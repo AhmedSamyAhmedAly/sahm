@@ -115,10 +115,6 @@ class Settings(BaseSettings):
     super_vol_min: float = 1.2           # volume must be >= this x average to confirm
     market_regime_gate: bool = True      # in a down market, demote buys one notch
 
-    # --- portfolio budget allocator ---
-    alloc_top_n: int = 8                  # how many top picks to spread a budget across
-    alloc_max_position_pct: float = 0.25  # cap any single position at 25% (diversification)
-
     @property
     def extra_ticker_list(self) -> list[str]:
         out = []

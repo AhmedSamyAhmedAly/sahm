@@ -34,22 +34,6 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def _column_migrations() -> list[tuple[str, str, str]]:
-    """Idempotent ADD COLUMN migrations for columns added after first deploy.
-    `create_all` makes missing *tables* but never alters existing ones, so these
-    keep an already-provisioned Postgres/SQLite in sync on startup."""
-    is_sqlite = engine.dialect.name == "sqlite"
-    boolean = "INTEGER DEFAULT 0" if is_sqlite else "BOOLEAN DEFAULT FALSE"
-    return [
-        ("contact_messages", "contact", "VARCHAR(256)"),
-        ("users", "first_name", "VARCHAR(80)"),
-        ("users", "last_name", "VARCHAR(80)"),
-        ("users", "mobile", "VARCHAR(40)"),
-        ("users", "avatar", "TEXT"),
-        ("holdings", "from_budget", boolean),
-    ]
-
-
 def _type_migrations() -> list[tuple[str, str, str]]:
     """Idempotent widen-column migrations (Postgres only; SQLite ignores varchar
     length so it's a no-op there). (table, column, new_type)."""
@@ -62,20 +46,9 @@ def _type_migrations() -> list[tuple[str, str, str]]:
 
 
 def ensure_schema() -> None:
-    """create_all + idempotent ADD COLUMN / widen migrations. Safe to call on every
-    startup; lets a plain `git push` deploy migrate itself (no manual step)."""
+    """create_all + idempotent widen migrations. Safe to call on every startup;
+    lets a plain `git push` deploy migrate itself (no manual step)."""
     init_db()
-    for table, col, coltype in _column_migrations():
-        # One transaction per ALTER: on Postgres a failed statement aborts the
-        # whole transaction, so an "already exists" must not poison the others.
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
-            log.info("schema: added %s.%s", table, col)
-        except Exception as e:  # noqa: BLE001
-            msg = str(e).lower()
-            if "exist" not in msg and "duplicate" not in msg:
-                log.warning("schema: could not add %s.%s: %s", table, col, e)
     for table, col, coltype in _type_migrations():
         try:
             with engine.begin() as conn:

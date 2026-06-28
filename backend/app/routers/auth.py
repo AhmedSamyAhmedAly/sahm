@@ -12,7 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
-from app.schemas import LoginRequest, ProfileUpdate, RegisterRequest, TokenResponse
+from app.schemas import LoginRequest, RegisterRequest, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -20,9 +20,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 def _token_response(user: User) -> TokenResponse:
     return TokenResponse(
         access_token=create_token(user.id, user.email, user.role),
-        email=user.email, role=user.role, budget=user.budget,
-        first_name=user.first_name, last_name=user.last_name,
-        mobile=user.mobile, avatar=user.avatar,
+        email=user.email, role=user.role,
     )
 
 
@@ -65,29 +63,6 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=TokenResponse)
 def me(user: User = Depends(get_current_user)):
     # Re-issue a fresh token alongside identity (handy for the SPA).
-    return _token_response(user)
-
-
-@router.patch("/me", response_model=TokenResponse)
-def update_me(req: ProfileUpdate, db: Session = Depends(get_db),
-              user: User = Depends(get_current_user)):
-    if req.email is not None:
-        new_email = req.email.lower()
-        if new_email != user.email:
-            clash = db.execute(select(User).where(User.email == new_email)).scalar_one_or_none()
-            if clash is not None:
-                raise HTTPException(status_code=409, detail="Email already in use")
-            user.email = new_email
-    if req.first_name is not None:
-        user.first_name = req.first_name.strip() or None
-    if req.last_name is not None:
-        user.last_name = req.last_name.strip() or None
-    if req.mobile is not None:
-        user.mobile = req.mobile.strip() or None
-    if req.avatar is not None:
-        user.avatar = req.avatar or None  # "" clears it
-    db.commit()
-    db.refresh(user)
     return _token_response(user)
 
 

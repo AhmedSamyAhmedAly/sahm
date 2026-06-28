@@ -7,10 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fromResp = (r) => ({
-    email: r.email, role: r.role, budget: r.budget,
-    first_name: r.first_name, last_name: r.last_name, mobile: r.mobile, avatar: r.avatar,
-  });
+  const fromResp = (r) => ({ email: r.email, role: r.role });
 
   useEffect(() => {
     if (!getToken()) {
@@ -38,8 +35,6 @@ export function AuthProvider({ children }) {
     loading,
     login: (email, password) => api.login(email, password).then(finish),
     register: (email, password, code) => api.register(email, password, code).then(finish),
-    updateProfile: (patch) => api.updateProfile(patch).then(finish),
-    setUserBudget: (budget) => setUser((u) => (u ? { ...u, budget } : u)),
     logout: () => {
       setToken(null);
       setUser(null);

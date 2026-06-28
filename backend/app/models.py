@@ -14,7 +14,6 @@ from sqlalchemy import (
     LargeBinary,
     Numeric,
     String,
-    Text,
     UniqueConstraint,
     Index,
 )
@@ -38,78 +37,11 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(16), default="member")  # admin | member
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # suspended = can't log in
     last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
-    budget: Mapped[float | None] = mapped_column(Float)  # EGP available to allocate
-    # --- profile (admin-set for now; self-serve registration is a future phase) ---
-    first_name: Mapped[str | None] = mapped_column(String(80))
-    last_name: Mapped[str | None] = mapped_column(String(80))
-    mobile: Mapped[str | None] = mapped_column(String(40))
-    avatar: Mapped[str | None] = mapped_column(Text)  # data URL (base64) profile picture
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     watchlist: Mapped[list["WatchlistItem"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    holdings: Mapped[list["Holding"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
-
-
-class Holding(Base):
-    """A stock the user actually bought (their real portfolio)."""
-
-    __tablename__ = "holdings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    ticker: Mapped[str] = mapped_column(String(32), index=True)
-    buy_price: Mapped[float] = mapped_column(Numeric(18, 4))  # average buy price
-    quantity: Mapped[float] = mapped_column(Float)  # shares currently held
-    # --- realized side (from sells) ---
-    sold_qty: Mapped[float] = mapped_column(Float, default=0.0)
-    avg_sell_price: Mapped[float | None] = mapped_column(Float)
-    realized_pnl: Mapped[float] = mapped_column(Float, default=0.0)
-    from_budget: Mapped[bool] = mapped_column(Boolean, default=False)  # cost came out of budget
-    closed: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
-
-    user: Mapped[User] = relationship(back_populates="holdings")
-    sales: Mapped[list["Sale"]] = relationship(cascade="all, delete-orphan")
-
-
-class Sale(Base):
-    """A single sell transaction against a holding (kept so sell history can be
-    listed, edited and removed; the holding's realized aggregates are derived
-    from these rows)."""
-
-    __tablename__ = "sales"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    holding_id: Mapped[int] = mapped_column(
-        ForeignKey("holdings.id", ondelete="CASCADE"), index=True
-    )
-    ticker: Mapped[str] = mapped_column(String(32), index=True)  # denormalized for display
-    units: Mapped[float] = mapped_column(Float)
-    sell_price: Mapped[float] = mapped_column(Float)
-    buy_price: Mapped[float] = mapped_column(Float)  # avg buy price at time of sale
-    gain: Mapped[float] = mapped_column(Float, default=0.0)  # realized P/L for this sale
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-class ContactMessage(Base):
-    """A message sent from the Contact page (admins read these)."""
-
-    __tablename__ = "contact_messages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    email: Mapped[str | None] = mapped_column(String(256))   # account email
-    contact: Mapped[str | None] = mapped_column(String(256))  # reply-to email or mobile
-    title: Mapped[str] = mapped_column(String(256))
-    description: Mapped[str | None] = mapped_column(Text)
-    attachments: Mapped[list | None] = mapped_column(JSON)  # [{name,type,data(base64)}]
-    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class WatchlistItem(Base):

@@ -81,15 +81,6 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
     )
 
 
-@router.get("/assets")
-def list_assets(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Lightweight ticker list for the portfolio dropdown."""
-    rows = db.execute(
-        select(Asset.ticker, Asset.name).where(Asset.is_listed.is_(True)).order_by(Asset.ticker)
-    ).all()
-    return [{"ticker": t, "name": n} for t, n in rows]
-
-
 @router.get("/picks", response_model=PicksResponse)
 def get_picks(
     response: Response,

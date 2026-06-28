@@ -1,6 +1,6 @@
 """Create the initial set of accounts on whatever DB DATABASE_URL points to.
 
-Generates a secure temp password per user, sets name + role, upserts by email,
+Generates a secure temp password per user, sets the role, upserts by email,
 and prints the credentials to share. Re-running resets the password.
 
     DATABASE_URL=<neon url>  python scripts/create_accounts.py
@@ -44,8 +44,6 @@ def main() -> None:
                 db.add(u)
             u.hashed_password = hash_password(password)
             u.role = role
-            u.first_name = first
-            u.last_name = last
             u.is_active = True
             rows.append((f"{first} {last}", email, role, password))
         db.commit()
