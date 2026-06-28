@@ -45,16 +45,16 @@ class Settings(BaseSettings):
     min_history_days: int = 120          # need enough bars for indicators
     min_avg_value_traded: float = 200_000.0   # EGP/day, 20-day average
 
-    # Targets / horizons the backtester measures (the "Success %").
-    # Each (target_pct, horizon_days): did price rise >= target within horizon?
-    # Tuned to the win-rate frontier: bigger profit needs more time to clear a high
-    # confidence floor. +5%/30d hits ~90% on top picks (best profit-per-day >90%).
+    # Targets / horizons the backtester measures (the "Success %"), one per risk
+    # profile shown as a Suggestions tab:
+    #   (0.10,10) aggressive (high profit, short, high risk) + the rating band
+    #   (0.05,30) balanced (medium profit, medium term)
+    #   (0.03,40) safest (low profit, long term, highest hit-rate)
+    # The "best value" tab is computed (best profit-per-day at high confidence).
     target_bands: list[tuple[float, int]] = [
-        (0.03, 20),
+        (0.03, 40),
         (0.05, 30),
-        (0.05, 40),
-        (0.07, 60),
-        (0.10, 10),   # rating/conviction band (below) — not a profit target
+        (0.10, 10),
     ]
     # Fallback default band (used only when ML models aren't trained yet).
     primary_target_pct: float = 0.05

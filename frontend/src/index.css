@@ -41,6 +41,15 @@ a { color: var(--blue); text-decoration: none; }
 .container { max-width: 1180px; margin: 0 auto; padding: 20px; }
 .container.wide { max-width: 1500px; }   /* homepage table needs room for all columns */
 
+/* suggestion tabs */
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.tab {
+  background: var(--card); border: 1px solid var(--border); color: var(--muted);
+  border-radius: 10px; padding: 9px 15px; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.tab:hover { color: var(--text); }
+.tab.active { background: var(--green-soft); color: var(--green); border-color: var(--green); }
+
 /* kpi cards */
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }

@@ -5,10 +5,9 @@ import { SIGNAL_LABEL, money, prob } from "../format.js";
 
 const BANDS = [
   { key: "auto", label: "Auto — best profit / time", target: null, horizon: null },
-  { key: "t3_h20", label: "Target: +3% in 20d", target: 0.03, horizon: 20 },
+  { key: "t3_h40", label: "Target: +3% in 40d", target: 0.03, horizon: 40 },
   { key: "t5_h30", label: "Target: +5% in 30d", target: 0.05, horizon: 30 },
-  { key: "t5_h40", label: "Target: +5% in 40d", target: 0.05, horizon: 40 },
-  { key: "t7_h60", label: "Target: +7% in 60d", target: 0.07, horizon: 60 },
+  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
 ];
 
 const CONF = [
@@ -16,6 +15,8 @@ const CONF = [
   { key: "0.8", label: "≥ 80% confident", min: 0.8 },
   { key: "0.85", label: "≥ 85% confident", min: 0.85 },
 ];
+
+const BUY_SIGNALS = ["buy", "strong_buy", "super_strong_buy"];
 
 function Kpi({ label, value }) {
   return (
@@ -39,7 +40,7 @@ function NewsChip({ p }) {
 }
 
 export default function PicksView({
-  suggestionsOnly = false, showKpis = false, minimal = false, title = "Stocks",
+  suggestionsOnly = false, showKpis = false, minimal = false, title = "Stocks", tab = null,
 }) {
   const nav = useNavigate();
   const [data, setData] = useState(null);
@@ -49,8 +50,10 @@ export default function PicksView({
   const [signal, setSignal] = useState("");
   const [sort, setSort] = useState("rank");
   const [dir, setDir] = useState("asc");
-  const [band, setBand] = useState(BANDS[0]);
-  const [conf, setConf] = useState(CONF[0]);
+  // In tab mode the band/confidence/signal are fixed by the tab preset and the
+  // selectors are hidden; otherwise the user drives them.
+  const [band, setBand] = useState(tab ? (tab.band || BANDS[0]) : BANDS[0]);
+  const [conf, setConf] = useState(tab ? { min: tab.minConf || 0 } : CONF[0]);
 
   useEffect(() => {
     const params = { limit: 400 };
@@ -65,8 +68,8 @@ export default function PicksView({
   const rows = useMemo(() => {
     if (!data) return [];
     let r = data.picks;
-    if (suggestionsOnly)
-      r = r.filter((p) => p.signal === "buy" || p.signal === "strong_buy" || p.signal === "super_strong_buy");
+    if (tab) r = r.filter((p) => (tab.ratings || BUY_SIGNALS).includes(p.signal));
+    else if (suggestionsOnly) r = r.filter((p) => BUY_SIGNALS.includes(p.signal));
     if (signal) r = r.filter((p) => p.signal === signal);
     if (conf.min > 0) r = r.filter((p) => (p.success_prob || 0) >= conf.min);
     if (q) {
@@ -87,7 +90,7 @@ export default function PicksView({
       r = [...r].sort((a, b) => sign * cmp(a, b));
     }
     return r;
-  }, [data, q, signal, conf, sort, dir, suggestionsOnly, minimal]);
+  }, [data, q, signal, conf, sort, dir, suggestionsOnly, minimal, tab]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
@@ -110,21 +113,24 @@ export default function PicksView({
 
       <div className="card">
         <div className="toolbar">
-          <strong style={{ fontSize: 16 }}>{title}</strong>
+          <div>
+            <strong style={{ fontSize: 16 }}>{title}</strong>
+            {tab?.sub && <div style={{ color: "var(--muted)", fontSize: 12 }}>{tab.sub}</div>}
+          </div>
           <span className="pill">{rows.length} shown</span>
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
-          {!minimal && (
+          {!minimal && !tab && (
             <select value={band.key} onChange={(e) => setBand(BANDS.find((b) => b.key === e.target.value))}>
               {BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
             </select>
           )}
-          {!minimal && (
+          {!minimal && !tab && (
             <select value={conf.key} onChange={(e) => setConf(CONF.find((c) => c.key === e.target.value))}>
               {CONF.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           )}
-          {!minimal && (
+          {!minimal && !tab && (
             <select value={signal} onChange={(e) => setSignal(e.target.value)}>
               {suggestionsOnly ? (
                 <>
