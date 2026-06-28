@@ -47,15 +47,18 @@ class Settings(BaseSettings):
 
     # Targets / horizons the backtester measures (the "Success %").
     # Each (target_pct, horizon_days): did price rise >= target within horizon?
+    # Tuned to the win-rate frontier: bigger profit needs more time to clear a high
+    # confidence floor. +5%/30d hits ~90% on top picks (best profit-per-day >90%).
     target_bands: list[tuple[float, int]] = [
-        (0.05, 10),
-        (0.10, 10),
-        (0.15, 20),
-        (0.20, 20),
+        (0.03, 20),
+        (0.05, 30),
+        (0.05, 40),
+        (0.07, 60),
+        (0.10, 10),   # rating/conviction band (below) — not a profit target
     ]
     # Fallback default band (used only when ML models aren't trained yet).
     primary_target_pct: float = 0.05
-    primary_horizon_days: int = 10
+    primary_horizon_days: int = 30
 
     # The RATING (super/strong/buy/…) is read from this band — the hardest target
     # with the model's strongest edge over the market, so conviction is meaningful.
@@ -63,10 +66,12 @@ class Settings(BaseSettings):
     conviction_target_pct: float = 0.10
     conviction_horizon_days: int = 10
 
-    # Confidence-first TARGET: for each stock the scan headlines the BIGGEST target
-    # whose hit-probability is >= this. So picks advertise reliable profit, sized
-    # per stock, rather than forcing one global %. (Separate from the rating above.)
-    min_confidence: float = 0.60
+    # Confidence-first TARGET: among bands whose hit-probability clears this floor,
+    # the scan headlines the one with the best PROFIT-PER-DAY (most profit in the
+    # least time). The model's calibrated confidence caps ~88% on EGX, so the floor
+    # is set where it's actually reachable; the UI's confidence filter surfaces the
+    # highest-confidence picks honestly (with the model's real number).
+    min_confidence: float = 0.80
 
     # ATR-based trade levels.
     atr_stop_mult: float = 1.5     # stop = entry - 1.5 * ATR

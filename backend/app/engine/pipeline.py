@@ -43,15 +43,22 @@ def _load_bars(db: Session, ticker: str, limit: int = 400) -> pd.DataFrame:
     return df
 
 
-def _best_band(band_probs: dict, min_conf: float) -> dict | None:
-    """Confidence-first pick: the band with the LARGEST target whose probability
-    clears the confidence floor; if none clears it, the most confident band."""
-    cands = [b for b in band_probs.values() if b.get("prob") is not None]
+def _best_band(band_probs: dict, min_conf: float, exclude: set | None = None) -> dict | None:
+    """Confidence-first pick: among bands clearing the confidence floor, the most
+    profit in the least time — LARGEST target, then SHORTEST horizon. If none
+    clears the floor, fall back to the single most confident band."""
+    exclude = exclude or set()
+    cands = [b for k, b in band_probs.items()
+             if k not in exclude and b.get("prob") is not None]
     if not cands:
         return None
+
+    def ppd(b):  # profit per day = most profit in the least time
+        return (b["target_pct"] or 0) / max(1, b["horizon_days"] or 1)
+
     qualifying = [b for b in cands if b["prob"] >= min_conf]
     if qualifying:
-        return max(qualifying, key=lambda b: b["target_pct"])
+        return max(qualifying, key=ppd)
     return max(cands, key=lambda b: b["prob"])
 
 
@@ -124,9 +131,10 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
         else:
             signal = sc["signal"]
 
-        # TARGET (headline profit): confidence-first best play — the biggest target
-        # whose probability clears the floor (else the most confident band).
-        best = _best_band(band_probs, settings.min_confidence)
+        # TARGET (headline profit): confidence-first best play — most profit in the
+        # least time that clears the floor. Exclude the rating-only conviction band.
+        cv_key = ml.band_key(cv_t, cv_h)
+        best = _best_band(band_probs, settings.min_confidence, exclude={cv_key})
         if best is None:
             continue
         prim_t, prim_h = best["target_pct"], best["horizon_days"]

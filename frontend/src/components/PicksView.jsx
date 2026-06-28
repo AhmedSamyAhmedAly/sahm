@@ -4,11 +4,17 @@ import { api } from "../api.js";
 import { SIGNAL_LABEL, money, prob } from "../format.js";
 
 const BANDS = [
-  { key: "auto", label: "Auto — best play (≥60% confident)", target: null, horizon: null },
-  { key: "t5_h10", label: "Target: +5% in 10d", target: 0.05, horizon: 10 },
-  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
-  { key: "t15_h20", label: "Target: +15% in 20d", target: 0.15, horizon: 20 },
-  { key: "t20_h20", label: "Target: +20% in 20d", target: 0.2, horizon: 20 },
+  { key: "auto", label: "Auto — best profit / time", target: null, horizon: null },
+  { key: "t3_h20", label: "Target: +3% in 20d", target: 0.03, horizon: 20 },
+  { key: "t5_h30", label: "Target: +5% in 30d", target: 0.05, horizon: 30 },
+  { key: "t5_h40", label: "Target: +5% in 40d", target: 0.05, horizon: 40 },
+  { key: "t7_h60", label: "Target: +7% in 60d", target: 0.07, horizon: 60 },
+];
+
+const CONF = [
+  { key: "0", label: "Any confidence", min: 0 },
+  { key: "0.8", label: "≥ 80% confident", min: 0.8 },
+  { key: "0.85", label: "≥ 85% confident", min: 0.85 },
 ];
 
 function Kpi({ label, value }) {
@@ -44,6 +50,7 @@ export default function PicksView({
   const [sort, setSort] = useState("rank");
   const [dir, setDir] = useState("asc");
   const [band, setBand] = useState(BANDS[0]);
+  const [conf, setConf] = useState(CONF[0]);
 
   useEffect(() => {
     const params = { limit: 400 };
@@ -61,6 +68,7 @@ export default function PicksView({
     if (suggestionsOnly)
       r = r.filter((p) => p.signal === "buy" || p.signal === "strong_buy" || p.signal === "super_strong_buy");
     if (signal) r = r.filter((p) => p.signal === signal);
+    if (conf.min > 0) r = r.filter((p) => (p.success_prob || 0) >= conf.min);
     if (q) {
       const s = q.toLowerCase();
       r = r.filter((p) => p.ticker.toLowerCase().includes(s) || (p.name || "").toLowerCase().includes(s));
@@ -79,7 +87,7 @@ export default function PicksView({
       r = [...r].sort((a, b) => sign * cmp(a, b));
     }
     return r;
-  }, [data, q, signal, sort, dir, suggestionsOnly, minimal]);
+  }, [data, q, signal, conf, sort, dir, suggestionsOnly, minimal]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
@@ -109,6 +117,11 @@ export default function PicksView({
           {!minimal && (
             <select value={band.key} onChange={(e) => setBand(BANDS.find((b) => b.key === e.target.value))}>
               {BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+            </select>
+          )}
+          {!minimal && (
+            <select value={conf.key} onChange={(e) => setConf(CONF.find((c) => c.key === e.target.value))}>
+              {CONF.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           )}
           {!minimal && (
