@@ -26,7 +26,7 @@ def _token_response(user: User) -> TokenResponse:
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    if req.invite_code != settings.invite_code:
+    if not settings.open_registration and req.invite_code != settings.invite_code:
         raise HTTPException(status_code=403, detail="Invalid invite code")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")

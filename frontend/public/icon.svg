@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Saaed">
+  <rect width="512" height="512" rx="112" fill="#0d1117"/>
+  <polyline points="96,344 208,240 288,304 416,160"
+    fill="none" stroke="#3ddc97" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="336,160 416,160 416,240"
+    fill="none" stroke="#3ddc97" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

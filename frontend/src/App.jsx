@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import StockDetail from "./pages/StockDetail.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
+import Landing from "./pages/Landing.jsx";
 import Logo from "./components/Logo.jsx";
 
 function AdminDropdown() {
@@ -24,7 +25,6 @@ function AdminDropdown() {
       {open && (
         <div className="dropdown" onClick={() => setOpen(false)}>
           <NavLink to="/admin/users" className={item}>👥 Users</NavLink>
-          <NavLink to="/track-record" className={item}>📊 Track Record</NavLink>
         </div>
       )}
     </div>
@@ -39,6 +39,9 @@ function Nav() {
       <div className="brand"><Logo /></div>
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
         Suggestions
+      </NavLink>
+      <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+        Track record
       </NavLink>
       {user.role === "admin" && <AdminDropdown />}
       <div className="spacer" />
@@ -55,17 +58,24 @@ function Protected({ children, adminOnly = false }) {
   return children;
 }
 
+// Home: the public landing page for visitors, the Dashboard for logged-in users.
+function Home() {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="loading">Loading…</div>;
+  return user ? <Dashboard /> : <Landing />;
+}
+
 export default function App() {
   return (
     <>
       <Nav />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Protected><Dashboard /></Protected>} />
+        <Route path="/" element={<Home />} />
         <Route path="/stocks/:ticker" element={<Protected><StockDetail /></Protected>} />
         <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
-        <Route path="/track-record" element={<Protected adminOnly><TrackRecord /></Protected>} />
+        <Route path="/track-record" element={<TrackRecord />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />

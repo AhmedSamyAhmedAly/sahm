@@ -1,20 +1,23 @@
 """Track record: backtested hit-rates + realized live outcomes (the trust anchor)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import require_admin
-from app.models import BacktestStat, ModelVersion, Outcome, Recommendation, User
+from app.models import BacktestStat, ModelVersion, Outcome, Recommendation
 from app.schemas import BacktestStatOut, ModelMetricOut, TrackRecordResponse
 
 router = APIRouter(prefix="/api", tags=["track-record"])
 
 
+# PUBLIC — the track record is the trust anchor; anyone (even logged-out visitors
+# on the landing page) can see the honest, backtested + live results. Aggregate
+# stats only, no user data. Cached since it changes at most once a day.
 @router.get("/track-record", response_model=TrackRecordResponse)
-def track_record(db: Session = Depends(get_db), user: User = Depends(require_admin)):
+def track_record(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "public, max-age=600"
     # Backtested stats, ordered by band then target.
     bt_rows = db.execute(
         select(BacktestStat).order_by(

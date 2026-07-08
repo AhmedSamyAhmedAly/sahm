@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./sahm.db"
     jwt_secret: str = "change-me"
     invite_code: str = "sahm-invite"
+    # Set OPEN_REGISTRATION=true to let anyone sign up (public growth); otherwise
+    # registration stays gated by the shared invite_code.
+    open_registration: bool = False
 
     # --- access ---
     # The ONE admin. This email is always admin; everyone else is always member.

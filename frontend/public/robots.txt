@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /$
+Allow: /track-record
+Allow: /legal
+Allow: /contact
+Allow: /login
+# Keep the authenticated app out of the index.
+Disallow: /portfolio
+Disallow: /admin
+Disallow: /stocks
+
+Sitemap: https://sahmfe.vercel.app/sitemap.xml

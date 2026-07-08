@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   CartesianGrid,
   Line,
@@ -9,9 +10,24 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
+import { useAuth } from "../auth.jsx";
+import Logo from "../components/Logo.jsx";
 import { prob, signed } from "../format.js";
 
+// Shown to logged-out visitors (this page is public) so shared/SEO traffic can
+// convert — the app nav is hidden until you sign in.
+function PublicBar() {
+  return (
+    <div className="publicbar">
+      <Link to="/" className="brand"><Logo /></Link>
+      <div className="spacer" style={{ flex: 1 }} />
+      <Link to="/login" className="btn-primary">Get started — free</Link>
+    </div>
+  );
+}
+
 export default function TrackRecord() {
+  const { user } = useAuth();
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
 
@@ -19,7 +35,7 @@ export default function TrackRecord() {
     api.trackRecord().then(setD).catch((e) => setErr(e.message));
   }, []);
 
-  if (err) return <div className="container"><div className="error">{err}</div></div>;
+  if (err) return <div className="container">{!user && <PublicBar />}<div className="error">{err}</div></div>;
   if (!d) return <div className="loading">Loading track record…</div>;
 
   // Group backtest stats by score band for a readable table.
@@ -33,6 +49,7 @@ export default function TrackRecord() {
 
   return (
     <div className="container">
+      {!user && <PublicBar />}
       <h2 style={{ marginTop: 0 }}>Track Record</h2>
       <div className="card" style={{ padding: 16, marginBottom: 18, borderColor: "var(--accent)" }}>
         <p style={{ margin: 0, lineHeight: 1.6 }}>

@@ -50,6 +50,46 @@ a { color: var(--blue); text-decoration: none; }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--green-soft); color: var(--green); border-color: var(--green); }
 
+/* buttons (shared) */
+.btn-primary {
+  display: inline-block; background: var(--green); color: #04130b; font-weight: 800;
+  border: none; border-radius: 10px; padding: 11px 20px; font-size: 15px; cursor: pointer;
+}
+.btn-primary:hover { filter: brightness(1.06); }
+.btn-ghost {
+  display: inline-block; background: transparent; color: var(--text); font-weight: 700;
+  border: 1px solid var(--border); border-radius: 10px; padding: 11px 20px; font-size: 15px; cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--muted); }
+
+/* public bar (logged-out header on public pages) */
+.publicbar {
+  display: flex; align-items: center; gap: 14px; padding: 8px 0 18px;
+  border-bottom: 1px solid var(--border); margin-bottom: 18px;
+}
+
+/* landing page */
+.landing { max-width: 900px; margin: 0 auto; padding: 20px; }
+.landing-hero { text-align: center; padding: 48px 12px 24px; }
+.landing-brand { display: inline-block; margin-bottom: 22px; }
+.landing-hero h1 { font-size: clamp(28px, 6vw, 46px); line-height: 1.1; margin: 0 0 14px; }
+.landing-sub { color: var(--muted); font-size: clamp(15px, 2.4vw, 18px); line-height: 1.6; max-width: 640px; margin: 0 auto; }
+.landing-cta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 26px; }
+.landing-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 30px 0; }
+.lstat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 16px; text-align: center; }
+.lstat-val { font-size: clamp(26px, 6vw, 40px); font-weight: 800; color: var(--green); }
+.lstat-label { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.landing-how { margin: 40px 0 10px; }
+.landing-how h2 { text-align: center; font-size: 24px; margin-bottom: 22px; }
+.landing-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 26px; }
+.lstep { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.lstep b { color: var(--text); }
+.lstep span {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--green-soft); color: var(--green); font-weight: 800; margin-bottom: 10px;
+}
+@media (max-width: 640px) { .landing-stats, .landing-steps { grid-template-columns: 1fr; } }
+
 /* kpi cards */
 .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
 .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
