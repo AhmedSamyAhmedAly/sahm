@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, func, insert, select, text  # noqa: E402
 
 from app.database import Base  # noqa: E402
-from app.models import DailyBar, Outcome, Recommendation  # noqa: E402
+from app.models import Asset, DailyBar, Outcome, Recommendation  # noqa: E402
 
 SRC = "sqlite:///./sahm.db"
 BATCH = 300
@@ -66,9 +66,11 @@ def main() -> None:
     with tgt.connect() as c:
         neon_max_bar = c.execute(select(func.max(DailyBar.date))).scalar()
         neon_oc_recids = {r for (r,) in c.execute(select(Outcome.recommendation_id)).all()}
+        neon_tickers = {t for (t,) in c.execute(select(Asset.ticker)).all()}
 
     # Read the small slice from the local file.
     with src.connect() as s:
+        assets = [dict(r._mapping) for r in s.execute(select(Asset.__table__)).all()]
         latest = s.execute(select(func.max(Recommendation.date))).scalar()
         recs = ([dict(r._mapping) for r in s.execute(
             select(Recommendation.__table__).where(Recommendation.date == latest)).all()]
@@ -82,6 +84,15 @@ def main() -> None:
         else:
             bars = [dict(r._mapping) for r in s.execute(
                 select(DailyBar.__table__).where(DailyBar.date > neon_max_bar)).all()]
+
+    # NEW STOCKS FIRST: both recommendations and daily_bars have a foreign key to
+    # assets.ticker, so any newly-listed ticker (e.g. EODHD re-coding a stock) must
+    # exist in Neon before we push its bars/recs — otherwise the whole push aborts.
+    new_assets = [a for a in assets if a["ticker"] not in neon_tickers]
+    for a in new_assets:
+        a.pop("id", None)  # Neon assigns its own id
+    if new_assets:
+        _insert(tgt, Asset.__table__, new_assets)
 
     # Recommendations: replace just the latest date; drop ids (Neon auto-assigns).
     if recs:
@@ -113,7 +124,8 @@ def main() -> None:
         _insert(tgt, Outcome.__table__, new_oc)
 
     with tgt.connect() as c:
-        print(f"pushed: recs({latest})={len(recs)} new_bars={len(bars)} new_outcomes={len(new_oc)}")
+        print(f"pushed: new_assets={len(new_assets)} recs({latest})={len(recs)} "
+              f"new_bars={len(bars)} new_outcomes={len(new_oc)}")
         print("neon totals -> recs:",
               c.execute(text("select count(*) from recommendations")).scalar(),
               "| bars:", c.execute(text("select count(*) from daily_bars")).scalar(),
