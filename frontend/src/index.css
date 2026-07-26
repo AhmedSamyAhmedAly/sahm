@@ -252,6 +252,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .navdrop .dropdown { width: 190px; left: 0; right: auto; }
 .navdrop .dropdown a.dropdown-item { color: var(--text); text-decoration: none; }
 .navdrop .dropdown a.dropdown-item.active { color: var(--accent); }
+.navdrop .dropdown button.dropdown-item.active { color: var(--accent); background: var(--card-2); }
 
 @media (max-width: 820px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }

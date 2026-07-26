@@ -159,11 +159,13 @@ class BacktestStat(Base):
     __tablename__ = "backtest_stats"
     __table_args__ = (
         UniqueConstraint(
-            "score_band", "target_pct", "horizon_days", name="uq_bt_band_target_horizon"
+            "exchange", "score_band", "target_pct", "horizon_days",
+            name="uq_bt_market_band_target_horizon",
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exchange: Mapped[str] = mapped_column(String(16), default="EGX", index=True)  # per-market
     score_band: Mapped[str] = mapped_column(String(16))  # e.g. "80-90"
     target_pct: Mapped[float] = mapped_column(Float)
     horizon_days: Mapped[int] = mapped_column(Integer)
@@ -180,6 +182,7 @@ class ModelVersion(Base):
     __tablename__ = "model_versions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exchange: Mapped[str] = mapped_column(String(16), default="EGX", index=True)  # per-market
     band_key: Mapped[str] = mapped_column(String(32), index=True)  # e.g. "t10_h10"
     target_pct: Mapped[float] = mapped_column(Float)
     horizon_days: Mapped[int] = mapped_column(Integer)
@@ -198,6 +201,7 @@ class PipelineRun(Base):
     __tablename__ = "pipeline_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    exchange: Mapped[str] = mapped_column(String(16), default="EGX", index=True)  # per-market
     run_date: Mapped[dt.date] = mapped_column(Date, index=True)
     data_date: Mapped[dt.date | None] = mapped_column(Date)  # latest bar date used
     universe_size: Mapped[int | None] = mapped_column(Integer)

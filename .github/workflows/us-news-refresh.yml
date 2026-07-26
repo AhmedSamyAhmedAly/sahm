@@ -1,0 +1,37 @@
+name: US intraday news refresh
+
+# Refreshes only the NEWS overlay (sentiment, catalysts, light re-rank) on the latest
+# US scan — the same cheap job as EGX's, but MARKET=US so it uses US news sources and
+# only touches US recommendations. Reads/writes the tiny shortlist on Neon directly.
+# US market hours are 09:30-16:00 America/New_York; times below are UTC, Mon-Fri.
+on:
+  schedule:
+    - cron: "45 14 * * 1-5"   # ~10:45 ET (late morning)
+    - cron: "45 18 * * 1-5"   # ~14:45 ET (afternoon)
+    - cron: "45 21 * * 1-5"   # ~17:45 ET (after close)
+  workflow_dispatch: {}
+
+concurrency:
+  group: us-news-refresh
+  cancel-in-progress: false
+
+jobs:
+  news:
+    runs-on: ubuntu-latest
+    env:
+      MARKET: US
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+      - name: Refresh US news overlay
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
+          ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
+        run: python -m app.cli news

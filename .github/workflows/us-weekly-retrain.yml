@@ -1,0 +1,63 @@
+name: US weekly retrain
+
+# The HEAVY US job: recompute the backtest hit-rate bands and retrain the ML models on
+# the FULL US history (read from the separate sahm-us.db Actions cache — zero Neon
+# transfer). Only the small trained models + bands are written to Neon, scoped to
+# MARKET=US so EGX's production models are never touched. US market is closed on
+# weekends — run Saturday.
+on:
+  schedule:
+    - cron: "23 6 * * 6"   # Sat ~06:23 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: us-weekly-retrain
+  cancel-in-progress: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    env:
+      MARKET: US
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+
+      - name: Restore US history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}
+          restore-keys: sahm-us-db-
+
+      - name: Backtest + retrain on local US file (no Neon reads)
+        env:
+          DATABASE_URL: "sqlite:///./sahm-us.db"
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+        run: |
+          if [ ! -f sahm-us.db ]; then
+            echo "No cached US history — building it from EODHD first."
+            python -m app.cli ingest
+          fi
+          python -m app.cli retrain
+
+      - name: Push US models + bands to Neon (small)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
+        run: python scripts/push_results_to_neon.py
+
+      - name: Save US history cache
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}

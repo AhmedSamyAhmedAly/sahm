@@ -1,0 +1,81 @@
+name: Daily US scan
+
+# Same LIGHT nightly engine as EGX, but for the US market (MARKET=US). It reads the
+# full US history from a SEPARATE Actions cache (sahm-us.db) for free and writes only
+# the tiny incremental serving slice (today's US picks + bars) to the SAME Neon DB —
+# EGX and US never collide because every row is namespaced by exchange.
+#
+# US cash session opens 09:30 America/New_York. We scan pre-open (US EOD data for the
+# prior session is available overnight), Mon-Fri. Times are UTC and span both EST/EDT.
+on:
+  schedule:
+    - cron: "47 8 * * 1-5"    # ~03:47/04:47 ET — well before the 09:30 open
+    - cron: "47 12 * * 1-5"   # backup, still pre-open
+  workflow_dispatch: {}       # manual runs (also used to first bootstrap US)
+
+concurrency:
+  group: us-daily-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write          # manage the US history cache
+      contents: read
+    env:
+      MARKET: US              # <- selects the US MarketProfile for the whole job
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+
+      # Restore the rolling US history file (separate key from EGX's sahm-db-*).
+      - name: Restore US history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}
+          restore-keys: sahm-us-db-
+
+      - name: Engine on local US file (no Neon reads)
+        id: engine
+        env:
+          DATABASE_URL: "sqlite:///./sahm-us.db"
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
+          ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
+        run: |
+          if [ -f sahm-us.db ]; then
+            python -m app.cli daily
+          else
+            echo "No cached US history — bootstrapping from EODHD (one-time, heavy)."
+            python -m app.cli ingest
+            python -m app.cli retrain
+            python -m app.cli scan
+            echo "bootstrapped=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push US picks + today's bars to Neon (tiny)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
+        run: python scripts/push_serving.py
+
+      - name: Push US models to Neon (only after a bootstrap)
+        if: steps.engine.outputs.bootstrapped == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
+        run: python scripts/push_results_to_neon.py
+
+      - name: Save US history cache
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}

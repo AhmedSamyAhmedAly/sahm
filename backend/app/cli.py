@@ -2,7 +2,7 @@
 
   python -m app.cli initdb            # create tables
   python -m app.cli seed              # load synthetic data (no token needed)
-  python -m app.cli ingest            # pull real EGX data (needs EODHD token)
+  python -m app.cli ingest            # pull real market data (needs EODHD token)
   python -m app.cli backtest          # compute Success % bands from history
   python -m app.cli train             # train calibrated ML models (accuracy layer)
   python -m app.cli scan              # run the daily scan -> recommendations
@@ -12,12 +12,17 @@
   python -m app.cli retrain           # HEAVY weekly: backtest + train
   python -m app.cli demo              # seed -> backtest -> train -> scan (local demo)
   python -m app.cli create-user EMAIL PASSWORD [admin|member]
+
+Every data/engine command runs against ONE market (exchange). Choose it with
+``--market EGX`` / ``--market US`` (or the ``MARKET`` env var); default is EGX.
+EGX and US keep separate assets, models and recommendations, so the two never
+collide even in the same database.
 """
 from __future__ import annotations
 
 import sys
 
-from app.config import settings
+from app.config import active_market_code, set_active_market, settings
 from app.database import SessionLocal, init_db
 from app.engine import backtest as bt
 from app.engine import ml
@@ -75,15 +80,19 @@ def _grade():
 
 
 def _news():
-    """Refresh only the news overlay for the latest scan (cheap; run intraday)."""
+    """Refresh only the news overlay for THIS market's latest scan (cheap; intraday)."""
     from sqlalchemy import func, select
-    from app.models import Recommendation
+    from app.models import Asset, Recommendation
     with SessionLocal() as db:
-        latest = db.execute(select(func.max(Recommendation.date))).scalar()
+        ex_tickers = select(Asset.ticker).where(Asset.exchange == settings.exchange)
+        latest = db.execute(
+            select(func.max(Recommendation.date))
+            .where(Recommendation.ticker.in_(ex_tickers))
+        ).scalar()
         if latest is None:
-            print("no recommendations yet — run scan first")
+            print(f"no {settings.exchange} recommendations yet — run scan first")
             return
-        print("news refreshed:", enrich_news(db, latest), "for", latest)
+        print("news refreshed:", enrich_news(db, latest), "for", latest, settings.exchange)
 
 
 def _retrain():
@@ -150,15 +159,38 @@ _COMMANDS = {
 }
 
 
+def _parse_market(argv: list[str]) -> list[str]:
+    """Pull a `--market CODE` / `--market=CODE` flag out of argv (sets the active
+    market) and return the remaining args. Defaults to the MARKET env / EGX."""
+    rest: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--market" and i + 1 < len(argv):
+            set_active_market(argv[i + 1])
+            i += 2
+            continue
+        if a.startswith("--market="):
+            set_active_market(a.split("=", 1)[1])
+            i += 1
+            continue
+        rest.append(a)
+        i += 1
+    return rest
+
+
 def main():
-    if len(sys.argv) < 2:
+    args = _parse_market(sys.argv[1:])
+    if not args:
         print(__doc__)
-        print("token configured:", bool(settings.eodhd_api_token))
+        print("active market:", active_market_code(), "| token configured:",
+              bool(settings.eodhd_api_token))
         sys.exit(0)
-    cmd = sys.argv[1]
+    cmd = args[0]
     init_db()
+    print(f"[market={settings.exchange}] {cmd}")
     if cmd == "create-user":
-        _create_user(sys.argv[2:])
+        _create_user(args[1:])
         return
     if cmd not in _COMMANDS:
         print(__doc__)

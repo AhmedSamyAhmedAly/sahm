@@ -128,9 +128,12 @@ def run_backtest(
     start: dt.date | None = None,
     end: dt.date | None = None,
 ) -> dict:
-    """Backtest the whole active universe and persist BacktestStat rows."""
+    """Backtest this market's active universe and persist BacktestStat rows."""
+    ex = settings.exchange
     target_bands = target_bands or settings.target_bands
-    tickers = db.execute(select(Asset.ticker).where(Asset.is_active.is_(True))).scalars().all()
+    tickers = db.execute(
+        select(Asset.ticker).where(Asset.is_active.is_(True), Asset.exchange == ex)
+    ).scalars().all()
 
     all_samples: list[dict] = []
     for t in tickers:
@@ -139,11 +142,12 @@ def run_backtest(
 
     stats = aggregate(all_samples)
 
-    # Replace the stored table with the fresh computation.
-    db.query(BacktestStat).delete()
+    # Replace only THIS market's stored stats (never touch the other exchange's rows).
+    db.query(BacktestStat).filter(BacktestStat.exchange == ex).delete()
     for s in stats.values():
         db.add(
             BacktestStat(
+                exchange=ex,
                 score_band=s["score_band"],
                 target_pct=s["target_pct"],
                 horizon_days=s["horizon_days"],
@@ -154,12 +158,14 @@ def run_backtest(
             )
         )
     db.commit()
-    return {"tickers": len(tickers), "samples": len(all_samples), "bands": len(stats)}
+    return {"market": ex, "tickers": len(tickers), "samples": len(all_samples), "bands": len(stats)}
 
 
 def load_stats_map(db: Session) -> dict[tuple, BacktestStat]:
-    """Map (score_band, target_pct, horizon) -> BacktestStat for quick lookup."""
-    rows = db.execute(select(BacktestStat)).scalars().all()
+    """Map (score_band, target_pct, horizon) -> BacktestStat for the active market."""
+    rows = db.execute(
+        select(BacktestStat).where(BacktestStat.exchange == settings.exchange)
+    ).scalars().all()
     return {(r.score_band, r.target_pct, r.horizon_days): r for r in rows}
 
 

@@ -23,10 +23,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import create_engine, func, insert, select, text  # noqa: E402
 
+from app.config import settings  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.models import Asset, DailyBar, Outcome, Recommendation  # noqa: E402
 
-SRC = "sqlite:///./sahm.db"
+# Local history file to read the serving slice from. Defaults to the EGX cache;
+# the US job points this at sahm-us.db via LOCAL_DB_URL.
+SRC = os.environ.get("LOCAL_DB_URL", "sqlite:///./sahm.db")
 BATCH = 300
 
 
@@ -51,6 +54,7 @@ def _rec_map(conn) -> dict:
 
 
 def main() -> None:
+    ex = settings.exchange  # active market (MARKET env; default EGX)
     url = os.environ["DATABASE_URL"]
     tgt = create_engine(url, pool_pre_ping=True, insertmanyvalues_page_size=80)
     src = create_engine(SRC)
@@ -63,8 +67,13 @@ def main() -> None:
     except Exception:  # noqa: BLE001
         pass
 
+    ex_tickers_sq = select(Asset.ticker).where(Asset.exchange == ex)
     with tgt.connect() as c:
-        neon_max_bar = c.execute(select(func.max(DailyBar.date))).scalar()
+        # Per-market max bar date: EGX and US trade on different calendars, so "new
+        # bars" must be measured against THIS market's latest, not a global max.
+        neon_max_bar = c.execute(
+            select(func.max(DailyBar.date)).where(DailyBar.ticker.in_(ex_tickers_sq))
+        ).scalar()
         neon_oc_recids = {r for (r,) in c.execute(select(Outcome.recommendation_id)).all()}
         neon_tickers = {t for (t,) in c.execute(select(Asset.ticker)).all()}
 
@@ -94,12 +103,18 @@ def main() -> None:
     if new_assets:
         _insert(tgt, Asset.__table__, new_assets)
 
-    # Recommendations: replace just the latest date; drop ids (Neon auto-assigns).
+    # Recommendations: replace just the latest date FOR THIS MARKET; drop ids (Neon
+    # auto-assigns). Scoping the delete by exchange is essential — otherwise pushing US
+    # picks would wipe EGX's picks for the same scan date (both markets scan daily).
     if recs:
         for r in recs:
             r.pop("id", None)
         with tgt.begin() as c:
-            c.execute(text("DELETE FROM recommendations WHERE date = :d"), {"d": latest})
+            c.execute(
+                text("DELETE FROM recommendations WHERE date = :d AND ticker IN "
+                     "(SELECT ticker FROM assets WHERE exchange = :ex)"),
+                {"d": latest, "ex": ex},
+            )
         _insert(tgt, Recommendation.__table__, recs)
 
     # New bars (today's) — strictly newer than Neon's max, so no (ticker,date) dups.

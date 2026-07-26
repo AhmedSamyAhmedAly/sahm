@@ -39,16 +39,18 @@ _SCHEMA = {
     "additionalProperties": False,
 }
 
-_INSTRUCTIONS = (
-    "You are an equity news analyst for the Egyptian Exchange (EGX). You read "
-    "recent headlines (Arabic and English) about one company and judge their likely "
-    "short-term (1-2 week) impact on the share price. Be sober and skeptical: ignore "
-    "generic market noise, weight concrete events (earnings, deals, regulatory, "
-    "dividends, lawsuits). Return sentiment in [-1,1], a label, a ONE-sentence thesis "
-    "in English, key catalysts (short phrases), and risk_flag=true if there is a "
-    "material negative/uncertainty. If headlines are irrelevant or absent, return "
-    "neutral with an empty thesis."
-)
+def _instructions() -> str:
+    """Analyst prompt, market-aware (names the active exchange)."""
+    return (
+        f"You are an equity news analyst for the {settings.market_name} ({settings.exchange}). "
+        "You read recent headlines about one company and judge their likely "
+        "short-term (1-2 week) impact on the share price. Be sober and skeptical: ignore "
+        "generic market noise, weight concrete events (earnings, deals, regulatory, "
+        "dividends, lawsuits). Return sentiment in [-1,1], a label, a ONE-sentence thesis "
+        "in English, key catalysts (short phrases), and risk_flag=true if there is a "
+        "material negative/uncertainty. If headlines are irrelevant or absent, return "
+        "neutral with an empty thesis."
+    )
 
 
 def _is_trusted(source: str, source_url: str) -> bool:
@@ -64,15 +66,17 @@ def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]
     filtered to trusted publishers only (when news_trusted_only is on)."""
     code = ticker.split(".")[0]
     company = (name or code).strip()
-    queries = {
-        "en": f'"{company}" (EGX OR Egypt stock OR shares)',
-        "ar": f'"{company}" البورصة المصرية',
-    }
+    prof = settings.profile
+    en_hint = prof.news_query_en or "(stock OR shares)"
+    queries = {"en": f'"{company}" {en_hint}'}
+    if prof.news_query_ar:
+        queries["ar"] = f'"{company}" {prof.news_query_ar}'
+    region = prof.news_region or "US"
     seen: set[str] = set()
     items: list[dict] = []
     for lang in settings.news_lang_list:
         q = queries.get(lang, f'"{company}"')
-        gl, ceid = ("EG", f"EG:{lang}")
+        gl, ceid = (region, f"{region}:{lang}")
         url = f"{_GN}?q={urllib.parse.quote(q)}&hl={lang}&gl={gl}&ceid={ceid}"
         try:
             resp = requests.get(url, headers=_UA, timeout=15)
@@ -145,7 +149,7 @@ def _openai_assess(name: str | None, headlines: list[dict]) -> dict | None:
         resp = client.chat.completions.create(
             model=settings.openai_model,
             messages=[
-                {"role": "system", "content": _INSTRUCTIONS + " Respond ONLY with a JSON object "
+                {"role": "system", "content": _instructions() + " Respond ONLY with a JSON object "
                  'with keys: sentiment (number -1..1), label ("positive"|"neutral"|"negative"), '
                  "thesis (string), catalysts (array of strings), risk_flag (boolean)."},
                 {"role": "user", "content": _payload(name, headlines)},
@@ -171,7 +175,7 @@ def _anthropic_assess(name: str | None, headlines: list[dict]) -> dict | None:
         resp = client.messages.create(
             model=settings.news_model,
             max_tokens=600,
-            system=[{"type": "text", "text": _INSTRUCTIONS,
+            system=[{"type": "text", "text": _instructions(),
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": _payload(name, headlines)}],
             output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},

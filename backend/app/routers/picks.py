@@ -91,18 +91,34 @@ def get_picks(
     min_score: float = 0.0,
     target: float | None = Query(None, description="target band, e.g. 0.10"),
     horizon: int | None = Query(None, description="horizon days for the band, e.g. 10"),
+    market: str | None = Query(None, description="filter by exchange, e.g. EGX or US"),
     limit: int = 200,
 ):
     # Picks change at most once a day, so let the browser reuse its copy for a few
     # minutes — repeated visits then don't re-read Neon (keeps free-tier transfer low).
     response.headers["Cache-Control"] = "private, max-age=180"
-    latest_date = db.execute(select(func.max(Recommendation.date))).scalar()
-    universe = db.execute(
-        select(func.count(Asset.id)).where(Asset.is_listed.is_(True))
-    ).scalar() or 0
-    active = db.execute(
-        select(func.count(Asset.id)).where(Asset.is_active.is_(True))
-    ).scalar() or 0
+
+    # The website can be scoped to one market (exchange). Assets carry an `exchange`
+    # column and tickers are namespaced (COMI.EGX, AAPL.US), so every count/query
+    # below is filtered to the requested market when one is given.
+    mkt = market.strip().upper() if market else None
+
+    # Latest scan date *within this market* — a market with no scan yet (e.g. US
+    # before its pipeline runs) returns None here and yields an empty, honest response.
+    latest_date_q = select(func.max(Recommendation.date))
+    if mkt:
+        latest_date_q = latest_date_q.join(
+            Asset, Asset.ticker == Recommendation.ticker
+        ).where(Asset.exchange == mkt)
+    latest_date = db.execute(latest_date_q).scalar()
+
+    universe_q = select(func.count(Asset.id)).where(Asset.is_listed.is_(True))
+    active_q = select(func.count(Asset.id)).where(Asset.is_active.is_(True))
+    if mkt:
+        universe_q = universe_q.where(Asset.exchange == mkt)
+        active_q = active_q.where(Asset.exchange == mkt)
+    universe = db.execute(universe_q).scalar() or 0
+    active = db.execute(active_q).scalar() or 0
     if latest_date is None:
         return PicksResponse(date=None, universe_size=universe, active_count=active, picks=[])
 
@@ -111,6 +127,8 @@ def get_picks(
         .join(Asset, Asset.ticker == Recommendation.ticker, isouter=True)
         .where(Recommendation.date == latest_date, Recommendation.score >= min_score)
     )
+    if mkt:
+        q = q.where(Asset.exchange == mkt)
     if sector:
         q = q.where(Asset.sector == sector)
     rows = db.execute(q).all()
@@ -136,7 +154,10 @@ def get_picks(
     # data-only row (last price, no prediction). Skipped when a specific signal
     # is requested, since unscored stocks have no signal.
     if not signal:
-        listed = db.execute(select(Asset).where(Asset.is_listed.is_(True))).scalars().all()
+        listed_q = select(Asset).where(Asset.is_listed.is_(True))
+        if mkt:
+            listed_q = listed_q.where(Asset.exchange == mkt)
+        listed = db.execute(listed_q).scalars().all()
         for asset in listed:
             if asset.ticker in rec_tickers:
                 continue

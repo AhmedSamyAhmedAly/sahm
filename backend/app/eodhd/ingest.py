@@ -1,4 +1,4 @@
-"""Ingestion: pull EGX symbols + full price history into the local DB."""
+"""Ingestion: pull the active market's symbols + price history into the local DB."""
 from __future__ import annotations
 
 import datetime as dt
@@ -14,9 +14,21 @@ _INCLUDE_TYPES = {"common stock", "etf", "fund", "mutual fund", "unit"}
 
 
 def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
-    """Upsert the exchange symbol list into `assets`. Returns active-listed tickers."""
-    rows = client.symbol_list()
-    existing = {a.ticker: a for a in db.execute(select(Asset)).scalars()}
+    """Upsert the active market's symbol list into `assets`. Returns its tickers.
+
+    Everything here is scoped to ``settings.exchange`` so running the US ingest never
+    touches EGX rows (and vice versa) — critically, de-listing only ever considers
+    the current exchange's assets.
+    """
+    ex = settings.exchange
+    rows = client.symbol_list(ex)
+    existing = {
+        a.ticker: a
+        for a in db.execute(select(Asset).where(Asset.exchange == ex)).scalars()
+    }
+    # For a virtual exchange (e.g. "US"), keep only the configured sub-exchanges
+    # (main boards) so we don't ingest the illiquid OTC/pink-sheet tail.
+    keep_subs = settings.profile.symbol_exchange_set
     seen: set[str] = set()
     tickers: list[str] = []
 
@@ -24,17 +36,19 @@ def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
         atype = (r.get("Type") or "").lower()
         if atype and atype not in _INCLUDE_TYPES:
             continue
+        if keep_subs and (r.get("Exchange") or "").upper() not in keep_subs:
+            continue
         code = r.get("Code")
         if not code:
             continue
-        ticker = f"{code}.{settings.egx_exchange}"
+        ticker = f"{code}.{ex}"
         seen.add(ticker)
         tickers.append(ticker)
         a = existing.get(ticker)
         if a is None:
             db.add(Asset(
                 ticker=ticker, name=r.get("Name"), asset_type=atype or None,
-                exchange=settings.egx_exchange, is_listed=True,
+                exchange=ex, is_listed=True,
             ))
         else:
             a.name = r.get("Name") or a.name
@@ -68,7 +82,7 @@ def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
         a = existing.get(ticker)
         if a is None:
             db.add(Asset(ticker=ticker, name=name, asset_type=atype,
-                         exchange=settings.egx_exchange, is_listed=True))
+                         exchange=ex, is_listed=True))
         else:
             a.name = name or a.name
             a.asset_type = atype
@@ -127,9 +141,12 @@ def ingest_prices(client: EODHDClient, db: Session, tickers: list[str],
 
 
 def apply_liquidity_filters(db: Session) -> int:
-    """Mark assets active if they have enough history and recent traded value."""
+    """Mark this market's assets active if they have enough history and traded value.
+    Thresholds (min history, min avg value traded) come from the active MarketProfile."""
     active = 0
-    assets = db.execute(select(Asset).where(Asset.is_listed.is_(True))).scalars().all()
+    assets = db.execute(
+        select(Asset).where(Asset.is_listed.is_(True), Asset.exchange == settings.exchange)
+    ).scalars().all()
     for a in assets:
         rows = db.execute(
             select(DailyBar.close, DailyBar.volume)

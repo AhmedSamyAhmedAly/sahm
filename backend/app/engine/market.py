@@ -22,6 +22,7 @@ import pandas as pd
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import Asset, DailyBar
 
 # Market feature names added to each stock's vector.
@@ -35,13 +36,19 @@ def compute_market_frame(db: Session, lookback_days: int | None = None) -> pd.Da
     lookback_days limits the read to recent *trading* days (for the nightly scan);
     None loads full history (weekly train/backtest).
     """
+    # One regime per market — the index/breadth are built only from THIS exchange's
+    # active universe, so an EGX-wide pullback never colours US signals (or vice versa).
     q = (
         select(DailyBar.date, DailyBar.ticker, DailyBar.close)
         .join(Asset, Asset.ticker == DailyBar.ticker)
-        .where(Asset.is_active.is_(True))
+        .where(Asset.is_active.is_(True), Asset.exchange == settings.exchange)
     )
     if lookback_days:
-        maxd = db.execute(select(func.max(DailyBar.date))).scalar()
+        maxd = db.execute(
+            select(func.max(DailyBar.date))
+            .join(Asset, Asset.ticker == DailyBar.ticker)
+            .where(Asset.exchange == settings.exchange)
+        ).scalar()
         if maxd:
             # ~1.6 calendar days per trading day, plus a buffer for SMA50 warm-up.
             cutoff = maxd - dt.timedelta(days=int(lookback_days * 1.6) + 20)

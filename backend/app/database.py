@@ -27,11 +27,78 @@ engine = create_engine(settings.database_url, **_engine_kwargs(settings.database
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def _has_column(conn, table: str, col: str) -> bool:
+    if engine.dialect.name == "sqlite":
+        rows = conn.execute(text(f"PRAGMA table_info({table})")).all()
+        return any(r[1] == col for r in rows)
+    row = conn.execute(text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name = :t AND column_name = :c"
+    ), {"t": table, "c": col}).first()
+    return row is not None
+
+
+def _has_table(conn, table: str) -> bool:
+    if engine.dialect.name == "sqlite":
+        row = conn.execute(text(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:t"
+        ), {"t": table}).first()
+    else:
+        row = conn.execute(text(
+            "SELECT 1 FROM information_schema.tables WHERE table_name=:t"
+        ), {"t": table}).first()
+    return row is not None
+
+
+def _ensure_market_columns() -> None:
+    """Add the per-market `exchange` column to the model/stat/run tables on an
+    existing database (idempotent). New DBs already get it from create_all; this
+    lets an already-populated Neon DB (and the CI SQLite cache) self-migrate.
+
+    Existing rows predate multi-market, so they are all EGX — backfilled as such.
+    backtest_stats also carries a unique constraint that must now include exchange:
+    on Postgres we swap the constraint in place (keeps EGX's stats); on SQLite (the
+    disposable CI cache) we just drop the table — it's fully regenerated every retrain.
+    """
+    is_sqlite = engine.dialect.name == "sqlite"
+    with engine.begin() as conn:
+        # Simple ADD COLUMN + backfill for the two artifact/audit tables.
+        for table in ("model_versions", "pipeline_runs"):
+            if _has_table(conn, table) and not _has_column(conn, table, "exchange"):
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN exchange VARCHAR(16) DEFAULT 'EGX'"))
+                conn.execute(text(
+                    f"UPDATE {table} SET exchange = 'EGX' WHERE exchange IS NULL"))
+                log.info("schema: added %s.exchange", table)
+
+        # backtest_stats needs the unique constraint to include exchange too.
+        if _has_table(conn, "backtest_stats") and not _has_column(conn, "backtest_stats", "exchange"):
+            if is_sqlite:
+                conn.execute(text("DROP TABLE backtest_stats"))  # recreated below by create_all
+                log.info("schema: dropped backtest_stats (SQLite) — regenerated on next retrain")
+            else:
+                conn.execute(text(
+                    "ALTER TABLE backtest_stats ADD COLUMN exchange VARCHAR(16) DEFAULT 'EGX'"))
+                conn.execute(text("UPDATE backtest_stats SET exchange = 'EGX' WHERE exchange IS NULL"))
+                # Swap (score_band,target_pct,horizon) -> (exchange,...) uniqueness.
+                conn.execute(text(
+                    "ALTER TABLE backtest_stats DROP CONSTRAINT IF EXISTS uq_bt_band_target_horizon"))
+                conn.execute(text(
+                    "ALTER TABLE backtest_stats ADD CONSTRAINT uq_bt_market_band_target_horizon "
+                    "UNIQUE (exchange, score_band, target_pct, horizon_days)"))
+                log.info("schema: added backtest_stats.exchange + market-scoped unique constraint")
+
+
 def init_db() -> None:
-    """Create all tables. Safe to call repeatedly."""
+    """Create all tables + self-migrate the per-market columns. Safe to call repeatedly."""
     from app import models  # noqa: F401  (register models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
+    try:
+        _ensure_market_columns()
+    except Exception as e:  # noqa: BLE001 — never block startup on a best-effort migration
+        log.warning("schema: market-column migration skipped: %s", e)
+    Base.metadata.create_all(bind=engine)  # recreate anything the migration dropped
 
 
 def _type_migrations() -> list[tuple[str, str, str]]:

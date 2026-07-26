@@ -47,7 +47,7 @@ class EODHDClient:
         return resp.json()
 
     def symbol_list(self, exchange: str | None = None) -> list[dict]:
-        exchange = exchange or settings.egx_exchange
+        exchange = exchange or settings.exchange
         data = self._get(f"exchange-symbol-list/{exchange}")
         if not isinstance(data, list):
             raise EODHDError("symbol list: unexpected payload")
@@ -73,7 +73,7 @@ class EODHDClient:
         """Quick auth/connectivity check. Returns {ok, detail}."""
         try:
             data = self.symbol_list()
-            return {"ok": True, "detail": f"{len(data)} symbols on {settings.egx_exchange}"}
+            return {"ok": True, "detail": f"{len(data)} symbols on {settings.exchange}"}
         except EODHDAuthError as e:
             return {"ok": False, "detail": str(e)}
         except EODHDError as e:

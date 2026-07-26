@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
-import { SIGNAL_LABEL, money, prob, signed } from "../format.js";
+import { SIGNAL_LABEL, money, prob, signed, tickerLabel } from "../format.js";
 
 const TIMEFRAMES = [
   { label: "1D", days: 1 }, { label: "1W", days: 7 }, { label: "1M", days: 30 },
@@ -52,7 +52,7 @@ export default function StockDetail() {
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <button className="ghost" onClick={() => nav(-1)}>← Back</button>
         <h2 style={{ margin: 0 }}>
-          {ticker.replace(".EGX", "")} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 16 }}>{d.name}</span>
+          {tickerLabel(ticker)} <span style={{ color: "var(--muted)", fontWeight: 500, fontSize: 16 }}>{d.name}</span>
         </h2>
         <div style={{ flex: 1 }} />
       </div>

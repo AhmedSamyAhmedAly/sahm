@@ -58,6 +58,15 @@ lying). About half still miss, which is exactly why stops and diversification ma
 
 ---
 
+## Markets
+Saaed is **multi-market**. A **Markets** switcher (top nav) flips the whole app between
+the **Egyptian Exchange (EGX)** and **US stocks** — each with its own universe, its own
+pre-open daily scan, and its own models, all kept separate in one database (details:
+[`docs/US_MARKET.md`](docs/US_MARKET.md)). Add a market by dropping a profile into
+`MARKETS` (`app/config.py`) + the frontend list + its scan workflows.
+
+---
+
 ## Under the hood (for the curious)
 - **Frontend:** React + Vite. **API:** FastAPI (Python). **Database:** Postgres (Neon).
 - **Hosting:** Vercel (frontend + serverless API), all on free tiers.

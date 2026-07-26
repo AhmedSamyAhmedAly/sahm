@@ -84,7 +84,9 @@ def build_matrix(db: Session, horizons: list[int]) -> pd.DataFrame:
     """
     max_h = max(horizons)
     frames: list[pd.DataFrame] = []
-    tickers = db.execute(select(Asset.ticker).where(Asset.is_active.is_(True))).scalars().all()
+    tickers = db.execute(
+        select(Asset.ticker).where(Asset.is_active.is_(True), Asset.exchange == settings.exchange)
+    ).scalars().all()
     for t in tickers:
         df = _load_bars(db, t)
         if len(df) < MIN_BARS + max_h + 2:
@@ -195,9 +197,13 @@ def train_band(db: Session, matrix: pd.DataFrame, target_pct: float, horizon: in
     buf = io.BytesIO()
     joblib.dump(prod, buf)
 
-    # Replace any existing production model for this band.
-    db.query(ModelVersion).filter(ModelVersion.band_key == key).delete()
+    # Replace any existing production model for this band IN THIS MARKET only.
+    ex = settings.exchange
+    db.query(ModelVersion).filter(
+        ModelVersion.band_key == key, ModelVersion.exchange == ex
+    ).delete()
     db.add(ModelVersion(
+        exchange=ex,
         band_key=key, target_pct=target_pct, horizon_days=horizon, algo=best["algo"],
         feature_set_version=FEATURE_SET_VERSION, n_samples=int(n),
         metrics=metrics, artifact=buf.getvalue(), is_production=True,
@@ -218,8 +224,13 @@ def train_all(db: Session, target_bands=None) -> list[dict]:
 # ---- inference ----
 class ModelBundle:
     def __init__(self, db: Session):
+        # Load only the active market's production models — an EGX scan must never
+        # score with US-trained weights.
         rows = db.execute(
-            select(ModelVersion).where(ModelVersion.is_production.is_(True))
+            select(ModelVersion).where(
+                ModelVersion.is_production.is_(True),
+                ModelVersion.exchange == settings.exchange,
+            )
         ).scalars().all()
         self.models = {}
         self.meta = {}

@@ -3,12 +3,137 @@
 Secrets (EODHD_API_TOKEN, JWT_SECRET, DATABASE_URL) come from the environment in
 production (Render/Vercel/GitHub Actions). Everything else has a sane default and
 is overridable, so behaviour is tunable without code changes.
+
+Multi-market
+------------
+The engine runs one MARKET at a time (an exchange: EGX, US, ...). The active market
+is chosen by the ``MARKET`` env var (default ``EGX``) or the CLI ``--market`` flag,
+and selects a :class:`MarketProfile` — the per-market knobs that differ (exchange
+code, currency, liquidity floor, news sources/language/region). Everything the two
+markets share (target bands, signal ratios, ATR, news weight) stays global. Each
+market keeps its own assets/bars/recommendations (namespaced tickers + the
+``exchange`` column) and its own models/backtest-stats (the ``exchange`` column),
+so EGX and US never clobber each other in the same database.
 """
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+@dataclass(frozen=True)
+class MarketProfile:
+    """The per-market knobs that differ between exchanges."""
+
+    code: str                  # exchange code == Asset.exchange, e.g. "EGX" / "US"
+    name: str                  # human label, e.g. "Egyptian Exchange"
+    currency: str              # display currency of the liquidity floor
+    min_history_days: int = 120         # bars needed before a stock is tradable
+    min_avg_value_traded: float = 200_000.0   # currency/day, 20-day average
+    extra_tickers: str = ""    # comma-separated codes EODHD omits from the list
+    # For virtual exchanges (EODHD "US" bundles NYSE/Nasdaq/OTC/pink-sheets), keep
+    # only symbols whose sub-exchange is in this set. Empty = accept all. This keeps
+    # the US universe to the main boards so the bootstrap stays tractable.
+    symbol_exchanges: str = ""
+    # --- news overlay ---
+    news_langs: str = "en"     # comma-separated Google-News languages
+    news_region: str = "US"    # Google-News country (gl)
+    news_query_en: str = "(stock OR shares)"   # English disambiguation clause
+    news_query_ar: str = ""    # Arabic clause (EGX only; empty = skip Arabic)
+    news_trusted_sources: str = ""             # trusted-publisher whitelist
+
+    @property
+    def extra_ticker_list(self) -> list[str]:
+        out = []
+        for s in self.extra_tickers.split(","):
+            s = s.strip().upper()
+            if s:
+                out.append(s if "." in s else f"{s}.{self.code}")
+        return out
+
+    @property
+    def symbol_exchange_set(self) -> set[str]:
+        return {s.strip().upper() for s in self.symbol_exchanges.split(",") if s.strip()}
+
+    @property
+    def news_lang_list(self) -> list[str]:
+        return [s.strip() for s in self.news_langs.split(",") if s.strip()]
+
+    @property
+    def news_trusted_list(self) -> list[str]:
+        return [s.strip().lower() for s in self.news_trusted_sources.split(",") if s.strip()]
+
+
+# The markets the app can scan. Add a new exchange here (+ the frontend MARKETS
+# list + its GitHub Actions workflows) to bring another market online.
+MARKETS: dict[str, MarketProfile] = {
+    "EGX": MarketProfile(
+        code="EGX",
+        name="Egyptian Exchange",
+        currency="EGP",
+        min_history_days=120,
+        min_avg_value_traded=200_000.0,           # EGP/day
+        extra_tickers="BIGP,FNAR",
+        news_langs="ar,en",
+        news_region="EG",
+        news_query_en="(EGX OR Egypt stock OR shares)",
+        news_query_ar="البورصة المصرية",
+        news_trusted_sources=(
+            "reuters.com,reuters,bloomberg.com,bloomberg,asharqbusiness.com,asharq business,"
+            "asharq,enterprise.press,enterprise,mubasher.info,mubasher,zawya.com,zawya,"
+            "ahram.org.eg,ahram online,al-ahram,daily news egypt,dailynewsegypt.com,"
+            "amwalalghad.com,amwal al ghad,almalnews.com,al mal,al-mal,alborsanews.com,"
+            "al borsa,alborsa,egypttoday.com,egypt today,arabfinance.com,arab finance,"
+            "investing.com,investing,cnbc.com,cnbc,reuters arabic"
+        ),
+    ),
+    "US": MarketProfile(
+        code="US",
+        name="US Stocks",
+        currency="USD",
+        min_history_days=120,
+        # Broader liquid US: a ~$5M/day dollar-volume floor keeps NYSE/Nasdaq names
+        # that actually trade (roughly the top ~1,500-3,000) and drops the illiquid tail.
+        min_avg_value_traded=5_000_000.0,          # USD/day
+        extra_tickers="",
+        # Main US boards only — drops OTC / pink-sheets (illiquid, and they'd bloat
+        # the full-history bootstrap). EODHD tags each symbol with its sub-exchange.
+        symbol_exchanges="NYSE,NASDAQ,NYSE ARCA,NYSE MKT,NYSE AMERICAN,AMEX,BATS,NMS",
+        news_langs="en",
+        news_region="US",
+        news_query_en="(NYSE OR NASDAQ OR stock OR shares OR earnings)",
+        news_query_ar="",
+        news_trusted_sources=(
+            "reuters.com,reuters,bloomberg.com,bloomberg,cnbc.com,cnbc,wsj.com,"
+            "wall street journal,barrons.com,barron's,barrons,marketwatch.com,marketwatch,"
+            "ft.com,financial times,forbes.com,forbes,businesswire.com,business wire,"
+            "globenewswire.com,globe newswire,prnewswire.com,pr newswire,"
+            "seekingalpha.com,seeking alpha,investing.com,investing,"
+            "finance.yahoo.com,yahoo finance,fool.com,motley fool,thestreet.com,the street"
+        ),
+    ),
+}
+
+_DEFAULT_MARKET = "EGX"
+# Active market for THIS process. Seeded from the MARKET env var; the CLI --market
+# flag can override it at runtime via set_active_market().
+_active_market = os.getenv("MARKET", _DEFAULT_MARKET).strip().upper() or _DEFAULT_MARKET
+
+
+def set_active_market(code: str) -> None:
+    """Override the active market (used by the CLI --market flag)."""
+    global _active_market
+    code = (code or "").strip().upper()
+    if code not in MARKETS:
+        raise ValueError(f"unknown market {code!r}; known: {', '.join(MARKETS)}")
+    _active_market = code
+
+
+def active_market_code() -> str:
+    return _active_market if _active_market in MARKETS else _DEFAULT_MARKET
 
 
 class Settings(BaseSettings):
@@ -37,16 +162,11 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
 
     # --- market / engine ---
-    egx_exchange: str = "EGX"
+    egx_exchange: str = "EGX"            # legacy alias; prefer the active `exchange`
     egx_top_n: int = 25
-
-    # EGX securities EODHD omits from the exchange-symbol-list but still serves via
-    # the eod/fundamentals endpoints. Comma-separated codes (e.g. "BIGP,FNAR").
-    extra_tickers: str = "BIGP,FNAR"
-
-    # Liquidity filters for the tradable universe.
-    min_history_days: int = 120          # need enough bars for indicators
-    min_avg_value_traded: float = 200_000.0   # EGP/day, 20-day average
+    # The active market is chosen by the MARKET env var (default EGX) or the CLI
+    # --market flag — see active_market_code() / set_active_market() above. Liquidity
+    # floors, extra tickers and the news config are per-market (MarketProfile / MARKETS).
 
     # Targets / horizons the backtester measures (the "Success %"), one per risk
     # profile shown as a Suggestions tab:
@@ -86,19 +206,10 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"    # cheap; used when OPENAI_API_TOKEN is set
     news_model: str = "claude-haiku-4-5"  # used when only ANTHROPIC_API_TOKEN is set
     news_weight: float = 0.03            # light re-rank weight within the shortlist
-    news_langs: str = "ar,en"            # comma-separated
     # Trusted-source whitelist: when on, headlines from any publisher NOT in this
-    # list are dropped before analysis (so sentiment is built on reputable sources
-    # only). Matched against the Google News publisher name AND its domain.
+    # market's list are dropped before analysis (so sentiment is built on reputable
+    # sources only). The list itself is per-market (MarketProfile.news_trusted_sources).
     news_trusted_only: bool = True
-    news_trusted_sources: str = (
-        "reuters.com,reuters,bloomberg.com,bloomberg,asharqbusiness.com,asharq business,"
-        "asharq,enterprise.press,enterprise,mubasher.info,mubasher,zawya.com,zawya,"
-        "ahram.org.eg,ahram online,al-ahram,daily news egypt,dailynewsegypt.com,"
-        "amwalalghad.com,amwal al ghad,almalnews.com,al mal,al-mal,alborsanews.com,"
-        "al borsa,alborsa,egypttoday.com,egypt today,arabfinance.com,arab finance,"
-        "investing.com,investing,cnbc.com,cnbc,reuters arabic"
-    )
 
     # --- signal conviction / gating (the "super strong" tiers + market regime) ---
     # Tiers are set by the model's edge = prob / market base-rate. The model's real
@@ -118,22 +229,47 @@ class Settings(BaseSettings):
     super_vol_min: float = 1.2           # volume must be >= this x average to confirm
     market_regime_gate: bool = True      # in a down market, demote buys one notch
 
+    # --- active market (delegates to the selected MarketProfile) ---
+    @property
+    def active_market(self) -> str:
+        """Exchange code of the market this process is scanning (EGX, US, ...)."""
+        return active_market_code()
+
+    @property
+    def profile(self) -> MarketProfile:
+        return MARKETS[self.active_market]
+
+    @property
+    def exchange(self) -> str:
+        return self.profile.code
+
+    @property
+    def market_name(self) -> str:
+        return self.profile.name
+
+    @property
+    def currency(self) -> str:
+        return self.profile.currency
+
+    @property
+    def min_history_days(self) -> int:
+        return self.profile.min_history_days
+
+    @property
+    def min_avg_value_traded(self) -> float:
+        return self.profile.min_avg_value_traded
+
     @property
     def extra_ticker_list(self) -> list[str]:
-        out = []
-        for s in self.extra_tickers.split(","):
-            s = s.strip().upper()
-            if s:
-                out.append(s if "." in s else f"{s}.{self.egx_exchange}")
-        return out
+        return self.profile.extra_ticker_list
 
     @property
     def news_lang_list(self) -> list[str]:
-        return [s.strip() for s in self.news_langs.split(",") if s.strip()]
+        return self.profile.news_lang_list
 
     @property
     def news_trusted_list(self) -> list[str]:
-        return [s.strip().lower() for s in self.news_trusted_sources.split(",") if s.strip()]
+        return self.profile.news_trusted_list
 
     @property
     def cors_origin_list(self) -> list[str]:

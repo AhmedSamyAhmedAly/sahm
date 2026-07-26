@@ -69,20 +69,30 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
     primary_t = settings.primary_target_pct
     primary_h = settings.primary_horizon_days
 
-    data_date = db.execute(select(func.max(DailyBar.date))).scalar()
+    ex = settings.exchange
+    data_date = db.execute(
+        select(func.max(DailyBar.date))
+        .join(Asset, Asset.ticker == DailyBar.ticker)
+        .where(Asset.exchange == ex)
+    ).scalar()
     scan_date = scan_date or data_date or dt.date.today()
 
     # Shared market-context series (regime/breadth) for the recent window — feeds
     # both the ML probability and the signal gating so buys know the regime.
     mframe = mkt.compute_market_frame(db, lookback_days=160)
 
-    assets = db.execute(select(Asset).where(Asset.is_active.is_(True))).scalars().all()
+    assets = db.execute(
+        select(Asset).where(Asset.is_active.is_(True), Asset.exchange == ex)
+    ).scalars().all()
     universe = db.execute(
-        select(func.count(Asset.id)).where(Asset.is_listed.is_(True))
+        select(func.count(Asset.id)).where(Asset.is_listed.is_(True), Asset.exchange == ex)
     ).scalar() or 0
 
-    # Clear any prior run for this date (idempotent).
-    db.execute(delete(Recommendation).where(Recommendation.date == scan_date))
+    # Clear any prior run for THIS market + date (idempotent). Scoped by exchange so a
+    # US scan on the same date never wipes EGX's recommendations (or vice versa).
+    ex_tickers = select(Asset.ticker).where(Asset.exchange == ex)
+    db.execute(delete(Recommendation).where(
+        Recommendation.date == scan_date, Recommendation.ticker.in_(ex_tickers)))
     db.commit()
 
     ranked = 0
@@ -156,13 +166,13 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
         ranked += 1
 
     db.add(PipelineRun(
-        run_date=dt.date.today(), data_date=data_date, universe_size=universe,
+        exchange=ex, run_date=dt.date.today(), data_date=data_date, universe_size=universe,
         active_count=len(assets), ranked_count=ranked,
     ))
     db.commit()
 
     news_done = enrich_news(db, scan_date) if settings.news_enabled else 0
-    return {"scan_date": str(scan_date), "ranked": ranked, "active": len(assets),
+    return {"market": ex, "scan_date": str(scan_date), "ranked": ranked, "active": len(assets),
             "news_enriched": news_done,
             "universe": universe}
 
@@ -173,17 +183,21 @@ def enrich_news(db: Session, scan_date: dt.date) -> int:
     Cost guard: only the top `news_shortlist_n` buy/strong_buy picks are enriched —
     never the whole universe. Failures per ticker are swallowed (news is supplementary).
     """
+    ex = settings.exchange
+    ex_tickers = select(Asset.ticker).where(Asset.exchange == ex)
     rows = db.execute(
         select(Recommendation)
         .where(Recommendation.date == scan_date,
-               Recommendation.signal.in_(("buy", "strong_buy")))
+               Recommendation.signal.in_(("buy", "strong_buy")),
+               Recommendation.ticker.in_(ex_tickers))
         .order_by(nullslast(Recommendation.success_prob.desc()))
         .limit(settings.news_shortlist_n)
     ).scalars().all()
     if not rows:
         return 0
 
-    names = dict(db.execute(select(Asset.ticker, Asset.name)).all())
+    names = dict(db.execute(
+        select(Asset.ticker, Asset.name).where(Asset.exchange == ex)).all())
     done = 0
     for rec in rows:
         try:
@@ -219,11 +233,12 @@ def enrich_news(db: Session, scan_date: dt.date) -> int:
 
 
 def grade_due(db: Session) -> int:
-    """Grade recommendations whose horizon has fully elapsed and aren't graded yet."""
+    """Grade this market's recommendations whose horizon has elapsed and aren't graded."""
+    ex_tickers = select(Asset.ticker).where(Asset.exchange == settings.exchange)
     pending = db.execute(
         select(Recommendation)
         .outerjoin(Outcome, Outcome.recommendation_id == Recommendation.id)
-        .where(Outcome.id.is_(None))
+        .where(Outcome.id.is_(None), Recommendation.ticker.in_(ex_tickers))
     ).scalars().all()
 
     graded = 0

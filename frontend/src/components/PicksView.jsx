@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { SIGNAL_LABEL, money, prob } from "../format.js";
+import { useMarket } from "../market.jsx";
+import { SIGNAL_LABEL, money, prob, tickerLabel } from "../format.js";
 
 const BANDS = [
   { key: "auto", label: "Auto — best profit / time", target: null, horizon: null },
@@ -43,6 +44,7 @@ export default function PicksView({
   suggestionsOnly = false, showKpis = false, minimal = false, title = "Stocks", tab = null,
 }) {
   const nav = useNavigate();
+  const { market, current } = useMarket();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [err, setErr] = useState("");
@@ -56,10 +58,12 @@ export default function PicksView({
   const [conf, setConf] = useState(tab ? { min: tab.minConf || 0 } : CONF[0]);
 
   useEffect(() => {
-    const params = { limit: 400 };
+    setData(null);
+    setErr("");
+    const params = { limit: 400, market };
     if (band.target != null) { params.target = band.target; params.horizon = band.horizon; }
     api.picks(params).then(setData).catch((e) => setErr(e.message));
-  }, [band]);
+  }, [band, market]);
 
   useEffect(() => {
     if (showKpis) api.trackRecord().then(setTrack).catch(() => {});
@@ -94,6 +98,25 @@ export default function PicksView({
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
+
+  // A market whose daily scan hasn't run yet (e.g. US before its pipeline is live)
+  // returns no universe and no picks — show an honest "coming soon" card instead of
+  // an empty table.
+  if (data.universe_size === 0 && data.picks.length === 0) {
+    return (
+      <div className="container wide">
+        <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>{current.flag}</div>
+          <strong style={{ fontSize: 18 }}>{current.name} — coming soon</strong>
+          <p style={{ color: "var(--muted)", marginTop: 8, maxWidth: 460, marginInline: "auto" }}>
+            We haven’t loaded {current.label} stocks yet. The daily scan for this market
+            will publish ranked suggestions here soon. In the meantime, switch back to
+            another market from the <b>Markets</b> menu above.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const strongBuys = data.picks.filter(
     (p) => p.signal === "strong_buy" || p.signal === "super_strong_buy").length;
@@ -193,7 +216,7 @@ export default function PicksView({
                   <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
                     <td className="num" data-label="#">{i + 1}</td>
                     <td className="tickercell" data-label="Stock">
-                      {p.ticker.replace(".EGX", "")}<small>{p.name}</small>
+                      {tickerLabel(p.ticker)}<small>{p.name}</small>
                     </td>
                   </tr>
                 ))}
@@ -215,7 +238,7 @@ export default function PicksView({
                   <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
                     <td className="num" data-label="#">{p.rank}</td>
                     <td className="tickercell" data-label="Stock">
-                      {p.ticker.replace(".EGX", "")}<small>{p.name}</small>
+                      {tickerLabel(p.ticker)}<small>{p.name}</small>
                     </td>
                     <td data-label="Signal">
                       {p.signal
@@ -258,7 +281,7 @@ export default function PicksView({
 
       <p className="disclaimer">
         {minimal
-          ? "Browse the full EGX universe. Tap a stock for details. "
+          ? `Browse the full ${current.label} universe. Tap a stock for details. `
           : "Success is the historical, backtested/ML hit-rate for stocks in the same score band — not a guarantee. "}
         Stocks marked <b>“data only”</b> didn’t pass our liquidity/history filters, so we show their
         latest price but make <b>no prediction</b> for them. Educational/research tool, <b>not financial advice</b>.

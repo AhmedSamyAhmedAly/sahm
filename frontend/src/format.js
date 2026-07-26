@@ -13,6 +13,9 @@ export const money = (x) =>
 
 export const prob = (p) => (p == null ? "—" : `${Math.round(p * 100)}%`);
 
+// Display a ticker without its exchange suffix (COMI.EGX -> COMI, AAPL.US -> AAPL).
+export const tickerLabel = (t) => (t || "").replace(/\.[A-Z]+$/, "");
+
 export const signed = (x, digits = 1) => {
   if (x == null) return "—";
   const v = Number(x);
