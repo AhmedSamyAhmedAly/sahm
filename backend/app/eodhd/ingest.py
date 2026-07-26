@@ -140,6 +140,41 @@ def ingest_prices(client: EODHDClient, db: Session, tickers: list[str],
     return inserted
 
 
+def tickers_without_bars(db: Session) -> list[str]:
+    """This market's listed tickers that have NO bars yet (i.e. not yet ingested).
+    Used to pull a huge universe (e.g. US) in resumable batches across several runs."""
+    ex = settings.exchange
+    have = select(DailyBar.ticker).distinct().subquery()
+    return db.execute(
+        select(Asset.ticker)
+        .where(Asset.is_listed.is_(True), Asset.exchange == ex,
+               Asset.ticker.notin_(select(have.c.ticker)))
+        .order_by(Asset.ticker)
+    ).scalars().all()
+
+
+def ingest_batch(client: EODHDClient, db: Session, batch: int | None = None) -> dict:
+    """Resumable full-history ingest. Refreshes the symbol list, then pulls the FULL
+    history for up to `batch` not-yet-ingested tickers (all of them if batch is None).
+
+    Re-run until ``remaining == 0``: each run tops up the persistent history cache, so
+    a universe too big to fetch in one job (US) comes in a chunk at a time. Liquidity
+    filters are recomputed each run so the active set grows as data lands.
+    """
+    ex = settings.exchange
+    refresh_assets(client, db)                       # know the full universe (1 API call)
+    pending = tickers_without_bars(db)
+    todo = pending[:batch] if batch else pending
+    inserted = ingest_prices(client, db, todo, full_history=True)
+    active = apply_liquidity_filters(db)
+    remaining = len(pending) - len(todo)
+    return {
+        "market": ex, "batch": (batch or len(todo)),
+        "ingested_this_run": len(todo), "bars_inserted": inserted,
+        "active": active, "remaining": remaining,
+    }
+
+
 def apply_liquidity_filters(db: Session) -> int:
     """Mark this market's assets active if they have enough history and traded value.
     Thresholds (min history, min avg value traded) come from the active MarketProfile."""

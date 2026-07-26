@@ -1,0 +1,99 @@
+name: US bootstrap (chunked ingest)
+
+# ONE-TIME (repeatable) manual bootstrap for the US market. The full US universe is
+# far too large to ingest-and-train in a single free-runner job (it runs out of
+# memory / time), so this pulls the history in RESUMABLE CHUNKS:
+#
+#   Click "Run workflow" -> it ingests the next `batch_size` not-yet-fetched tickers
+#   into the persistent sahm-us.db cache and prints how many remain. Re-run until it
+#   reports `remaining=0` — on that final run it automatically retrains the models,
+#   runs the first scan, and pushes US results to Neon (the US tab then goes live).
+#
+# The cache key prefix (sahm-us-db-) is shared with the daily/retrain workflows, so
+# once this finishes they pick up the same history for free.
+on:
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: "Tickers to ingest this run (lower it if a run nears the time limit)"
+        required: true
+        default: "1500"
+      finalize:
+        description: "When ingest completes (remaining=0), retrain + scan + push"
+        required: true
+        default: "true"
+
+concurrency:
+  group: us-bootstrap        # never let two chunk runs race the same cache
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350      # leave headroom under the 6h hard cap
+    permissions:
+      actions: write
+      contents: read
+    env:
+      MARKET: US
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-engine.txt
+
+      - name: Restore US history cache
+        uses: actions/cache/restore@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}
+          restore-keys: sahm-us-db-
+
+      - name: Ingest next chunk (resumable)
+        id: ingest
+        env:
+          DATABASE_URL: "sqlite:///./sahm-us.db"
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+        run: |
+          python -m app.cli ingest --batch "${{ github.event.inputs.batch_size }}" | tee ingest.log
+          remaining=$(grep -oE 'remaining=[0-9]+' ingest.log | tail -1 | cut -d= -f2)
+          echo "remaining=${remaining:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "### US ingest: remaining=${remaining:-unknown}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save US history cache
+        if: always()          # persist progress even if a later step fails
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-${{ github.run_id }}
+
+      - name: Finalize — retrain + first scan (only when ingest is complete)
+        if: steps.ingest.outputs.remaining == '0' && github.event.inputs.finalize == 'true'
+        env:
+          DATABASE_URL: "sqlite:///./sahm-us.db"
+          EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
+          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
+          ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
+        run: |
+          python -m app.cli retrain
+          python -m app.cli scan
+
+      - name: Finalize — push US models + first picks to Neon
+        if: steps.ingest.outputs.remaining == '0' && github.event.inputs.finalize == 'true'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
+        run: |
+          python scripts/push_results_to_neon.py
+          python scripts/push_serving.py
+
+      - name: Re-save cache after finalize (models/scan written locally)
+        if: steps.ingest.outputs.remaining == '0' && github.event.inputs.finalize == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: backend/sahm-us.db
+          key: sahm-us-db-final-${{ github.run_id }}

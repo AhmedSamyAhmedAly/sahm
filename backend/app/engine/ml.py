@@ -109,10 +109,17 @@ def build_matrix(db: Session, horizons: list[int]) -> pd.DataFrame:
                 row[f"fwd_max_{h}"] = float(np.max(high[i + 1 : i + 1 + h]))
             recs.append(row)
         if recs:
-            frames.append(pd.DataFrame(recs))
+            fr = pd.DataFrame(recs)
+            # Downcast floats to 32-bit *before* accumulating — halves the peak memory
+            # of the concatenated matrix, which for a big universe (US) is what pushes
+            # the free CI runner into an out-of-memory kill.
+            fcols = fr.select_dtypes("float64").columns
+            fr[fcols] = fr[fcols].astype("float32")
+            frames.append(fr)
     if not frames:
         return pd.DataFrame()
     matrix = pd.concat(frames, ignore_index=True).sort_values("date").reset_index(drop=True)
+    del frames
 
     # Join the shared market series by date and derive relative strength.
     mframe = compute_market_frame(db)
@@ -149,7 +156,7 @@ def train_band(db: Session, matrix: pd.DataFrame, target_pct: float, horizon: in
     col = f"fwd_max_{horizon}"
     sub = matrix.dropna(subset=[col, "close"]).copy()
     sub["y"] = (sub[col].to_numpy() >= sub["close"].to_numpy() * (1 + target_pct)).astype(int)
-    X = sub[ML_FEATURES].to_numpy(dtype=float)
+    X = sub[ML_FEATURES].to_numpy(dtype=np.float32)   # float32: half the memory, HGB-friendly
     y = sub["y"].to_numpy()
     key = band_key(target_pct, horizon)
 

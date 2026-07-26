@@ -54,27 +54,22 @@ jobs:
           if [ -f sahm-us.db ]; then
             python -m app.cli daily
           else
-            echo "No cached US history — bootstrapping from EODHD (one-time, heavy)."
-            python -m app.cli ingest
-            python -m app.cli retrain
-            python -m app.cli scan
-            echo "bootstrapped=true" >> "$GITHUB_OUTPUT"
+            # The full US bootstrap is too heavy for one job — do it via the dedicated
+            # "US bootstrap (chunked ingest)" workflow. Skip cleanly until it exists.
+            echo "No US history cache yet — run the 'US bootstrap (chunked ingest)' "\
+                 "workflow first. Skipping this daily run."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Push US picks + today's bars to Neon (tiny)
+        if: steps.engine.outputs.skipped != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LOCAL_DB_URL: "sqlite:///./sahm-us.db"
         run: python scripts/push_serving.py
 
-      - name: Push US models to Neon (only after a bootstrap)
-        if: steps.engine.outputs.bootstrapped == 'true'
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
-        run: python scripts/push_results_to_neon.py
-
       - name: Save US history cache
+        if: steps.engine.outputs.skipped != 'true'
         uses: actions/cache/save@v4
         with:
           path: backend/sahm-us.db

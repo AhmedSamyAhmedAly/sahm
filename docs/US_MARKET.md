@@ -40,12 +40,21 @@ soon"** card (no empty tables, no errors).
    ```
 2. **GitHub secrets.** The US workflows reuse the *existing* secrets — `EODHD_API_TOKEN`,
    `DATABASE_URL`, `OPENAI_API_TOKEN` / `ANTHROPIC_API_TOKEN`. Nothing new to add.
-3. **Bootstrap the US history + models.** Run the **Daily US scan** workflow manually
-   once (Actions → *Daily US scan* → *Run workflow*). With no `sahm-us.db` cache yet it
-   will `ingest → retrain → scan` from scratch and push US models + the first day's US
-   picks to Neon. ⚠️ **This first run is heavy** (full history for the liquid US
-   universe) and can take a while — run it off-hours and re-run if a transient EODHD
-   error interrupts it (it's idempotent and resumes from the cache).
+3. **Bootstrap the US history + models — in resumable chunks.** The full US universe
+   is far too big to ingest-and-train in one free-runner job (it runs out of
+   memory/time), so use the dedicated **US bootstrap (chunked ingest)** workflow
+   (Actions → *US bootstrap (chunked ingest)* → *Run workflow*):
+   - Each run ingests the next `batch_size` not-yet-fetched tickers into the
+     persistent `sahm-us.db` cache and prints `remaining=N` in its run summary.
+   - **Re-run it until the summary shows `remaining=0`.** On that final run it
+     automatically retrains the models, runs the first scan, and pushes US results to
+     Neon — the US tab then goes live.
+   - `batch_size` defaults to 1500; lower it (e.g. 500) if a run gets close to the
+     time limit, raise it to finish in fewer runs. It's fully idempotent — a failed or
+     interrupted run just resumes from the cache on the next click.
+
+   (The scheduled *Daily US scan* skips cleanly until this bootstrap has built the
+   cache, so it won't fail in the meantime.)
 4. **Verify.** Open the site → **Markets → US**. The US universe and suggestions should
    appear. Check `pipeline_runs` / `model_versions` in Neon show `exchange = 'US'` rows.
 5. **Let it run.** From then on the schedules take over:

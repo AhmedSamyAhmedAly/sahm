@@ -53,9 +53,29 @@ def _run_ingest(full_history: bool):
         print(f"active: {active}")
 
 
+# Set by --batch on the command line (resumable chunked full-history ingest).
+_INGEST_BATCH: int | None = None
+
+
 def _ingest():
-    """Full history pull — for first-time seeding only (heavy)."""
-    _run_ingest(full_history=True)
+    """First-time full-history pull. With --batch N, ingest only the next N not-yet-
+    ingested tickers (resumable) — re-run until it prints `remaining=0`. Without
+    --batch, pull the whole universe in one go (fine for EGX; too heavy for US)."""
+    if _INGEST_BATCH is None:
+        _run_ingest(full_history=True)
+        return
+    from app.eodhd.client import EODHDClient
+    from app.eodhd.ingest import ingest_batch
+    client = EODHDClient()
+    ping = client.ping()
+    print("EODHD:", ping)
+    if not ping["ok"]:
+        print("Cannot ingest — fix the token/plan first.")
+        sys.exit(1)
+    with SessionLocal() as db:
+        res = ingest_batch(client, db, _INGEST_BATCH)
+    print(res)
+    print(f"remaining={res['remaining']}")   # workflows grep this to know when done
 
 
 def _backtest():
@@ -179,8 +199,23 @@ def _parse_market(argv: list[str]) -> list[str]:
     return rest
 
 
+def _extract_batch(argv: list[str]) -> list[str]:
+    """Pull `--batch N` / `--batch=N` out of argv and set the ingest batch size."""
+    global _INGEST_BATCH
+    rest: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--batch" and i + 1 < len(argv):
+            _INGEST_BATCH = int(argv[i + 1]); i += 2; continue
+        if a.startswith("--batch="):
+            _INGEST_BATCH = int(a.split("=", 1)[1]); i += 1; continue
+        rest.append(a); i += 1
+    return rest
+
+
 def main():
-    args = _parse_market(sys.argv[1:])
+    args = _extract_batch(_parse_market(sys.argv[1:]))
     if not args:
         print(__doc__)
         print("active market:", active_market_code(), "| token configured:",
