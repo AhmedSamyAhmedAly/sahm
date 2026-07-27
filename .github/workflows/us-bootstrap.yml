@@ -53,14 +53,26 @@ jobs:
           key: sahm-us-db-${{ github.run_id }}
           restore-keys: sahm-us-db-
 
-      - name: Ingest next chunk (resumable)
+      - name: Ingest chunks until done or time budget (resumable)
         id: ingest
         env:
           DATABASE_URL: "sqlite:///./sahm-us.db"
           EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
         run: |
-          python -m app.cli ingest --batch "${{ github.event.inputs.batch_size }}" | tee ingest.log
-          remaining=$(grep -oE 'remaining=[0-9]+' ingest.log | tail -1 | cut -d= -f2)
+          # Ingest is low-memory, so we loop many batches in ONE run (each batch
+          # commits + is resumable) until the universe is done or we near the time
+          # budget — then we save the cache and you just click Run again to continue.
+          budget=$(( 4 * 3600 ))     # ~4h of ingesting, well under the job timeout
+          start=$SECONDS
+          remaining=unknown
+          while : ; do
+            python -m app.cli ingest --batch "${{ github.event.inputs.batch_size }}" | tee ingest.log
+            remaining=$(grep -oE 'remaining=[0-9]+' ingest.log | tail -1 | cut -d= -f2)
+            echo "  -> remaining=${remaining:-unknown} (elapsed $((SECONDS-start))s)"
+            [ "$remaining" = "0" ] && break
+            [ -z "$remaining" ] && { echo "no remaining= line — stopping"; break; }
+            [ $((SECONDS-start)) -ge $budget ] && { echo "time budget reached — pausing"; break; }
+          done
           echo "remaining=${remaining:-unknown}" >> "$GITHUB_OUTPUT"
           echo "### US ingest: remaining=${remaining:-unknown}" >> "$GITHUB_STEP_SUMMARY"
 

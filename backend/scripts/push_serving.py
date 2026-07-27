@@ -14,6 +14,7 @@ file (built fresh in CI) and Neon (seeded from elsewhere) use different id space
 """
 from __future__ import annotations
 
+import datetime as dt
 import os
 import sys
 import time
@@ -31,6 +32,9 @@ from app.models import Asset, DailyBar, Outcome, Recommendation  # noqa: E402
 # the US job points this at sahm-us.db via LOCAL_DB_URL.
 SRC = os.environ.get("LOCAL_DB_URL", "sqlite:///./sahm.db")
 BATCH = 300
+# On a market's FIRST push, cap bars to this many days back (charts need ~260 bars;
+# full history stays in the CI cache). Keeps the free Neon tier from overflowing.
+CHART_WINDOW_DAYS = int(os.environ.get("CHART_WINDOW_DAYS", "550"))
 
 
 def _insert(engine, table, rows):
@@ -89,7 +93,16 @@ def main() -> None:
             select(Recommendation.id, Recommendation.date, Recommendation.ticker)).all()}
         outcomes = [dict(r._mapping) for r in s.execute(select(Outcome.__table__)).all()]
         if neon_max_bar is None:
-            bars = [dict(r._mapping) for r in s.execute(select(DailyBar.__table__)).all()]
+            # First load for this market. Push only a RECENT window — the charts need
+            # ~260 bars, the full 16-year history stays in the CI cache for training.
+            # Dumping full history for a huge universe (US ~13.8k tickers) would blow
+            # the free Neon tier; this keeps the serving DB small.
+            local_max = s.execute(select(func.max(DailyBar.date))).scalar()
+            floor = local_max - dt.timedelta(days=CHART_WINDOW_DAYS) if local_max else None
+            bar_q = select(DailyBar.__table__)
+            if floor is not None:
+                bar_q = bar_q.where(DailyBar.date >= floor)
+            bars = [dict(r._mapping) for r in s.execute(bar_q).all()]
         else:
             bars = [dict(r._mapping) for r in s.execute(
                 select(DailyBar.__table__).where(DailyBar.date > neon_max_bar)).all()]
