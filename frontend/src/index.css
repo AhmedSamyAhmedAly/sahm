@@ -283,6 +283,29 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .plan-levels { grid-template-columns: 1fr; }
 }
 
+/* ---------- suggestions: trade note, scenario pills, edge, liquidity ---------- */
+.trade-note {
+  background: var(--card-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--text);
+}
+.bandpills { display: flex; flex-wrap: wrap; gap: 6px; min-width: 220px; }
+.band-pill {
+  display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap;
+  padding: 3px 8px; border-radius: 999px; font-size: 12px;
+  border: 1px solid var(--border); background: var(--card-2); color: var(--muted); cursor: help;
+}
+.band-pill b { font-weight: 700; }
+/* colour by how much the pick beats plain luck (the honest signal of skill) */
+.band-pill.edge-strong { border-color: rgba(61,220,151,0.55); background: rgba(61,220,151,0.14); color: var(--text); }
+.band-pill.edge-strong b { color: var(--accent); }
+.band-pill.edge-mild { border-color: rgba(61,220,151,0.28); color: var(--text); }
+.band-pill.edge-none { opacity: 0.7; }           /* barely beats luck — de-emphasised */
+.band-pill.edge-unknown { }
+
+.pill.liq-high { background: rgba(61,220,151,0.14); color: var(--accent); }
+.pill.liq-ok { background: var(--card-2); color: var(--muted); }
+.pill.liq-thin { background: rgba(255,107,107,0.14); color: var(--red); cursor: help; }
+
 @media (max-width: 820px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }

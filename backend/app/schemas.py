@@ -79,6 +79,11 @@ class PickOut(BaseModel):
     risk_reward: float | None = None
     expected_hold_days: float | None = None
     reasons: list[str] = []
+    # Per-band scenarios for the pills: [{target_pct, horizon_days, prob, n}, ...].
+    bands: list[dict] = []
+    # Liquidity / tradeability (how wide the spread is likely to be).
+    avg_value_traded: float | None = None       # recent avg daily traded value
+    liquidity: str | None = None                # "high" | "ok" | "thin" (vs market floor)
     # live news overlay (separate from success_prob)
     news_sentiment: float | None = None
     news_label: str | None = None

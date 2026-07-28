@@ -1,6 +1,8 @@
 """Picks: the ranked daily recommendations that power the dashboard."""
 from __future__ import annotations
 
+import datetime as dt
+
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -12,6 +14,48 @@ from app.models import Asset, DailyBar, Recommendation, User
 from app.schemas import PickOut, PicksResponse
 
 router = APIRouter(prefix="/api", tags=["picks"])
+
+
+def _avg_value_per_ticker(db: Session, lookback_days: int = 30) -> dict[str, float]:
+    """Recent average daily traded value (close x volume) per ticker — a cheap proxy
+    for liquidity / spread tightness. One grouped query over the recent window."""
+    maxd = db.execute(select(func.max(DailyBar.date))).scalar()
+    if maxd is None:
+        return {}
+    cutoff = maxd - dt.timedelta(days=lookback_days)
+    rows = db.execute(
+        select(DailyBar.ticker, func.avg(DailyBar.close * DailyBar.volume))
+        .where(DailyBar.date >= cutoff)
+        .group_by(DailyBar.ticker)
+    ).all()
+    return {t: float(v) for t, v in rows if v is not None}
+
+
+def _liquidity_tier(avg_value: float | None) -> str | None:
+    """Bucket a stock's traded value against this market's liquidity floor. A wide
+    spread (the cost you can't avoid) is most likely on the 'thin' names."""
+    if avg_value is None:
+        return None
+    floor = settings.min_avg_value_traded or 1.0
+    ratio = avg_value / floor
+    if ratio >= 5:
+        return "high"
+    if ratio >= 1.5:
+        return "ok"
+    return "thin"
+
+
+def _bands_list(rec: Recommendation) -> list[dict]:
+    """Compact per-band scenarios for the pills (sorted by target)."""
+    bp = rec.band_probs or {}
+    out = [
+        {"target_pct": b.get("target_pct"), "horizon_days": b.get("horizon_days"),
+         "prob": b.get("prob"), "n": b.get("n")}
+        for b in bp.values()
+        if b.get("target_pct") is not None
+    ]
+    out.sort(key=lambda x: (x["target_pct"] or 0))
+    return out
 
 
 def _latest_close_per_ticker(db: Session) -> dict[str, float]:
@@ -52,7 +96,8 @@ def band_override(rec: Recommendation, target: float | None, horizon: int | None
 
 
 def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
-             ov: dict | None = None, last_close: float | None = None) -> PickOut:
+             ov: dict | None = None, last_close: float | None = None,
+             avg_value: float | None = None) -> PickOut:
     feats = rec.features or {}
     ov = ov or {}
     return PickOut(
@@ -74,6 +119,9 @@ def _to_pick(rank: int, rec: Recommendation, asset: Asset | None,
         risk_reward=ov.get("risk_reward", feats.get("risk_reward")),
         expected_hold_days=ov.get("expected_hold", rec.expected_hold_days),
         reasons=rec.reasons or [],
+        bands=_bands_list(rec),
+        avg_value_traded=avg_value,
+        liquidity=_liquidity_tier(avg_value),
         news_sentiment=rec.news_sentiment,
         news_label=rec.news_label,
         news_thesis=rec.news_thesis,
@@ -134,6 +182,7 @@ def get_picks(
     rows = db.execute(q).all()
 
     closes = _latest_close_per_ticker(db)
+    avg_values = _avg_value_per_ticker(db)
 
     # Apply the chosen band, filter on the effective signal, then rank by the
     # effective success probability (with a light news nudge). Tuple shape:
@@ -170,11 +219,14 @@ def get_picks(
     picks = []
     for i, (kind, rec, asset, ov, _) in enumerate(items):
         if kind == "rec":
-            picks.append(_to_pick(i + 1, rec, asset, ov, closes.get(rec.ticker)))
+            picks.append(_to_pick(i + 1, rec, asset, ov, closes.get(rec.ticker),
+                                  avg_values.get(rec.ticker)))
         else:
+            av = avg_values.get(asset.ticker)
             picks.append(PickOut(
                 rank=i + 1, ticker=asset.ticker, name=asset.name, sector=asset.sector,
                 signal=None, score=None, last_close=closes.get(asset.ticker),
+                avg_value_traded=av, liquidity=_liquidity_tier(av),
             ))
     return PicksResponse(
         date=latest_date, universe_size=universe, active_count=active, picks=picks

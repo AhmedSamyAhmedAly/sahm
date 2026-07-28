@@ -1,23 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { useMarket } from "../market.jsx";
-import { groupOf, groupLabel, money, prob, tickerLabel } from "../format.js";
+import { useMarket, currencyForTicker } from "../market.jsx";
+import { groupOf, groupLabel, money, prob } from "../format.js";
 
-const BANDS = [
-  { key: "auto", label: "Auto — best profit / time", target: null, horizon: null },
-  { key: "t3_h40", label: "Target: +3% in 40d", target: 0.03, horizon: 40 },
-  { key: "t5_h30", label: "Target: +5% in 30d", target: 0.05, horizon: 30 },
-  { key: "t10_h10", label: "Target: +10% in 10d", target: 0.1, horizon: 10 },
-];
+const BUY_GROUPS = ["strong_buy", "buy"];
 
-const CONF = [
-  { key: "0", label: "Any confidence", min: 0 },
-  { key: "0.8", label: "≥ 80% confident", min: 0.8 },
-  { key: "0.85", label: "≥ 85% confident", min: 0.85 },
-];
-
-const BUY_SIGNALS = ["buy", "strong_buy", "super_strong_buy"];
+// Money with the market's currency ($ before the number, EGP after it).
+function fmt(x, cur) {
+  if (x == null) return "—";
+  return cur === "$" ? `$${money(x)}` : `${money(x)} ${cur}`;
+}
 
 function Kpi({ label, value }) {
   return (
@@ -40,68 +33,96 @@ function NewsChip({ p }) {
   );
 }
 
-export default function PicksView({
-  suggestionsOnly = false, showKpis = false, minimal = false, title = "Stocks", tab = null,
-}) {
+// "Easy to trade" flag — a stand-in for how tight the spread is (Point 3).
+const LIQ = {
+  high: { label: "Easy", cls: "liq-high", tip: "Heavily traded — tight spread, easy to buy/sell." },
+  ok: { label: "OK", cls: "liq-ok", tip: "Reasonably traded — a small spread cost." },
+  thin: { label: "Thin ⚠", cls: "liq-thin", tip: "Thinly traded — WIDE spread; you can lose 1–2% just entering. Trade with care or skip." },
+};
+function LiquidityChip({ p }) {
+  const l = LIQ[p.liquidity];
+  if (!l) return <span style={{ color: "var(--muted)" }}>—</span>;
+  return <span className={`pill ${l.cls}`} title={l.tip}>{l.label}</span>;
+}
+
+// One scenario pill: +X% target with its success % and how much it beats luck.
+function BandPill({ band, baseRate }) {
+  const pct = Math.round((band.target_pct || 0) * 100);
+  const days = band.horizon_days;
+  const p = band.prob;
+  const lift = p != null && baseRate ? p / baseRate : null;
+  const cls =
+    lift == null ? "edge-unknown" : lift >= 1.25 ? "edge-strong" : lift >= 1.08 ? "edge-mild" : "edge-none";
+  const edgeTxt =
+    lift == null ? "" : lift < 1.08 ? " · barely beats luck" : ` · ${lift.toFixed(1)}× luck`;
+  const tip =
+    p == null
+      ? `+${pct}% target`
+      : `${prob(p)} hit +${pct}% within ~${days}d${baseRate ? ` · luck alone ${Math.round(baseRate * 100)}%` : ""}${edgeTxt}${band.n ? ` · n=${band.n}` : ""}`;
+  return (
+    <span className={`band-pill ${cls}`} title={tip}>
+      +{pct}% <b>{prob(p)}</b>
+    </span>
+  );
+}
+
+/**
+ * mode: "suggestions" (buy-rated, full detail + pills) | "all" (whole universe, browse)
+ */
+export default function PicksView({ mode = "suggestions", showKpis = false, title = "Suggestions" }) {
   const nav = useNavigate();
   const { market, current } = useMarket();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [signal, setSignal] = useState("");
+  const [minConf, setMinConf] = useState(0);
   const [sort, setSort] = useState("rank");
-  const [dir, setDir] = useState("asc");
-  // In tab mode the band/confidence/signal are fixed by the tab preset and the
-  // selectors are hidden; otherwise the user drives them.
-  const [band, setBand] = useState(tab ? (tab.band || BANDS[0]) : BANDS[0]);
-  const [conf, setConf] = useState(tab ? { min: tab.minConf || 0 } : CONF[0]);
+  const isAll = mode === "all";
 
   useEffect(() => {
     setData(null);
     setErr("");
-    const params = { limit: 400, market };
-    if (band.target != null) { params.target = band.target; params.horizon = band.horizon; }
-    api.picks(params).then(setData).catch((e) => setErr(e.message));
-  }, [band, market]);
+    api.picks({ limit: 500, market }).then(setData).catch((e) => setErr(e.message));
+    api.trackRecord().then(setTrack).catch(() => {});
+  }, [market]);
 
-  useEffect(() => {
-    if (showKpis) api.trackRecord().then(setTrack).catch(() => {});
-  }, [showKpis]);
+  // Base hit-rate ("luck") per band, from the model metrics — for the edge coloring.
+  const baseRateByBand = useMemo(() => {
+    const m = {};
+    for (const mm of track?.models || []) {
+      m[`${Math.round(mm.target_pct * 100)}_${mm.horizon_days}`] = mm.base_rate;
+    }
+    return m;
+  }, [track]);
+  const baseRateFor = (band) => baseRateByBand[`${Math.round((band.target_pct || 0) * 100)}_${band.horizon_days}`];
 
   const rows = useMemo(() => {
     if (!data) return [];
     let r = data.picks;
-    if (tab) r = r.filter((p) => (tab.ratings || BUY_SIGNALS).includes(p.signal));
-    else if (suggestionsOnly) r = r.filter((p) => BUY_SIGNALS.includes(p.signal));
-    if (signal) r = r.filter((p) => groupOf(p.signal) === signal);
-    if (conf.min > 0) r = r.filter((p) => (p.success_prob || 0) >= conf.min);
+    if (!isAll) r = r.filter((p) => BUY_GROUPS.includes(groupOf(p.signal)));
+    if (!isAll && minConf > 0) r = r.filter((p) => (p.success_prob || 0) >= minConf);
     if (q) {
       const s = q.toLowerCase();
       r = r.filter((p) => p.ticker.toLowerCase().includes(s) || (p.name || "").toLowerCase().includes(s));
     }
-    if (minimal) {
+    if (isAll) {
       r = [...r].sort((a, b) => (a.name || a.ticker).localeCompare(b.name || b.ticker));
     } else {
       const cmp = (a, b) => {
-        if (sort === "rank") return (a.rank || 0) - (b.rank || 0);
-        if (sort === "prob") return (a.success_prob || 0) - (b.success_prob || 0);
-        if (sort === "rr") return (a.risk_reward || 0) - (b.risk_reward || 0);
+        if (sort === "prob") return (b.success_prob || 0) - (a.success_prob || 0);
+        if (sort === "score") return (b.score || 0) - (a.score || 0);
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
-        return (a.score || 0) - (b.score || 0);
+        return (a.rank || 0) - (b.rank || 0);
       };
-      const sign = dir === "asc" ? 1 : -1;
-      r = [...r].sort((a, b) => sign * cmp(a, b));
+      r = [...r].sort(cmp);
     }
     return r;
-  }, [data, q, signal, conf, sort, dir, suggestionsOnly, minimal, tab]);
+  }, [data, q, minConf, sort, isAll]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
 
-  // A market whose daily scan hasn't run yet (e.g. US before its pipeline is live)
-  // returns no universe and no picks — show an honest "coming soon" card instead of
-  // an empty table.
   if (data.universe_size === 0 && data.picks.length === 0) {
     return (
       <div className="container wide">
@@ -110,17 +131,14 @@ export default function PicksView({
           <strong style={{ fontSize: 18 }}>{current.name} — coming soon</strong>
           <p style={{ color: "var(--muted)", marginTop: 8, maxWidth: 460, marginInline: "auto" }}>
             We haven’t loaded {current.label} stocks yet. The daily scan for this market
-            will publish ranked suggestions here soon. In the meantime, switch back to
-            another market from the <b>Markets</b> menu above.
+            will publish ranked suggestions here soon.
           </p>
         </div>
       </div>
     );
   }
 
-  const strongBuys = data.picks.filter(
-    (p) => p.signal === "strong_buy" || p.signal === "super_strong_buy").length;
-  const superBuys = data.picks.filter((p) => p.signal === "super_strong_buy").length;
+  const strongBuys = data.picks.filter((p) => groupOf(p.signal) === "strong_buy").length;
   const winRate = track?.live_win_rate;
 
   return (
@@ -128,9 +146,17 @@ export default function PicksView({
       {showKpis && (
         <div className="kpis">
           <Kpi label="Stocks scanned" value={data.active_count} />
-          <Kpi label="Strong buys today" value={superBuys ? `${strongBuys} · ${superBuys} super` : strongBuys} />
+          <Kpi label="Strong buys today" value={strongBuys} />
           <Kpi label="Live win rate" value={winRate == null ? "—" : `${Math.round(winRate * 100)}%`} />
           <Kpi label="Last update" value={data.date || "—"} />
+        </div>
+      )}
+
+      {!isAll && (
+        <div className="trade-note">
+          These are <b>plans based on last night’s close</b>. Check the <b>live price</b> in your broker
+          and use a <b>limit buy</b> at the Buy price (never “buy at market”). Each pill shows the success %
+          and how much it <b>beats luck</b> — a high % that barely beats luck isn’t skill.
         </div>
       )}
 
@@ -138,82 +164,40 @@ export default function PicksView({
         <div className="toolbar">
           <div>
             <strong style={{ fontSize: 16 }}>{title}</strong>
-            {tab?.sub && <div style={{ color: "var(--muted)", fontSize: 12 }}>{tab.sub}</div>}
           </div>
           <span className="pill">{rows.length} shown</span>
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
-          {!minimal && !tab && (
-            <select value={band.key} onChange={(e) => setBand(BANDS.find((b) => b.key === e.target.value))}>
-              {BANDS.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+          {!isAll && (
+            <select value={minConf} onChange={(e) => setMinConf(Number(e.target.value))}>
+              <option value={0}>Any confidence</option>
+              <option value={0.8}>≥ 80% confident</option>
+              <option value={0.85}>≥ 85% confident</option>
             </select>
           )}
-          {!minimal && !tab && (
-            <select value={conf.key} onChange={(e) => setConf(CONF.find((c) => c.key === e.target.value))}>
-              {CONF.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-            </select>
-          )}
-          {!minimal && !tab && (
-            <select value={signal} onChange={(e) => setSignal(e.target.value)}>
-              {suggestionsOnly ? (
-                <>
-                  <option value="">All buys</option>
-                  <option value="strong_buy">Strong buy</option>
-                  <option value="buy">Buy</option>
-                </>
-              ) : (
-                <>
-                  <option value="">All signals</option>
-                  <option value="strong_buy">Strong buy</option>
-                  <option value="buy">Buy</option>
-                  <option value="hold">Hold</option>
-                  <option value="sell">Sell</option>
-                </>
-              )}
-            </select>
-          )}
-          {!minimal && (
+          {!isAll && (
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="rank">Sort: # (rank)</option>
-              <option value="score">Sort: Score</option>
-              <option value="prob">Sort: Success %</option>
-              <option value="rr">Sort: Risk/Reward</option>
-              <option value="name">Sort: Stock name</option>
+              <option value="rank">Sort: best first</option>
+              <option value="prob">Sort: success %</option>
+              <option value="score">Sort: score</option>
+              <option value="name">Sort: name</option>
             </select>
-          )}
-          {!minimal && (
-            <button type="button" className="iconbtn" onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
-              title={dir === "desc" ? "Descending (high → low)" : "Ascending (low → high)"}
-              style={{ minWidth: 96 }}>
-              {dir === "desc" ? "↓ High–Low" : "↑ Low–High"}
-            </button>
           )}
         </div>
 
-        {!minimal && (
-          <div className="legend">
-            <span className="legend-title">News</span>
-            <span>🟢 positive</span>
-            <span>🔴 negative</span>
-            <span>➖ neutral</span>
-            <span title="A strong, recent event (earnings, a big contract, a deal, a payout…) that can move the price soon.">
-              ⚡ catalyst
-            </span>
-            <span>— not analysed</span>
-          </div>
-        )}
-
         <div style={{ overflowX: "auto" }}>
-          {minimal ? (
+          {isAll ? (
             <table className="responsive">
-              <thead><tr><th>#</th><th>Stock</th></tr></thead>
+              <thead><tr><th>#</th><th>Stock</th><th className="num">Last price</th><th>Trade</th></tr></thead>
               <tbody>
                 {rows.map((p, i) => (
                   <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
                     <td className="num" data-label="#">{i + 1}</td>
                     <td className="tickercell" data-label="Stock">
-                      {tickerLabel(p.ticker)}<small>{p.name}</small>
+                      {p.ticker.split(".")[0]}<small>{p.name}</small>
                     </td>
+                    <td className="num" data-label="Last price">{fmt(p.last_close, currencyForTicker(p.ticker))}</td>
+                    <td data-label="Trade"><LiquidityChip p={p} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -222,53 +206,39 @@ export default function PicksView({
             <table className="responsive">
               <thead>
                 <tr>
-                  <th>#</th><th>Stock</th><th>Signal</th><th>News</th><th>Score</th>
-                  <th>Success</th><th className="num">Entry</th><th className="num">Target</th>
-                  <th className="num">Stop</th>
-                  <th className="num hide-sm" title="Risk : Reward — potential gain vs. potential loss. Higher is better.">R:R</th>
-                  <th className="num hide-sm">Hold</th>
+                  <th>#</th><th>Stock</th><th>Signal</th><th>Trade</th><th>News</th>
+                  <th>Scenarios (target · success · beats-luck)</th>
+                  <th className="num">Buy (limit)</th><th className="num">Stop</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p) => (
-                  <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
-                    <td className="num" data-label="#">{p.rank}</td>
-                    <td className="tickercell" data-label="Stock">
-                      {tickerLabel(p.ticker)}<small>{p.name}</small>
-                    </td>
-                    <td data-label="Signal">
-                      {p.signal
-                        ? <span className={`badge ${groupOf(p.signal)}`}>{groupLabel(p.signal)}</span>
-                        : <span className="pill" title="Did not pass the scan filters — data only">data only</span>}
-                    </td>
-                    <td data-label="News"><NewsChip p={p} /></td>
-                    <td data-label="Score">
-                      {p.score == null ? (
-                        <small style={{ color: "var(--muted)" }}>—</small>
-                      ) : (
-                        <>
-                          <div className="scorebar"><i style={{ width: `${p.score}%` }} /></div>
-                          <small style={{ color: "var(--muted)" }}>{p.score}</small>
-                        </>
-                      )}
-                    </td>
-                    <td className="prob" data-label="Success"><b>{prob(p.success_prob)}</b></td>
-                    <td className="num" data-label="Entry">{money(p.entry_price ?? p.last_close)}</td>
-                    <td className="num up" data-label="Target">
-                      {money(p.target_price)}
-                      {p.target_pct ? (
-                        <small style={{ display: "block", color: "var(--muted)" }}>
-                          +{Math.round(p.target_pct * 100)}% / {p.horizon_days}d
-                        </small>
-                      ) : null}
-                    </td>
-                    <td className="num down" data-label="Stop">{money(p.stop_loss)}</td>
-                    <td className="num hide-sm" data-label="R:R">{p.risk_reward ?? "—"}</td>
-                    <td className="num hide-sm" data-label="Hold">
-                      {p.expected_hold_days ? `~${Math.round(p.expected_hold_days)}d` : "—"}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((p) => {
+                  const cur = currencyForTicker(p.ticker);
+                  return (
+                    <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
+                      <td className="num" data-label="#">{p.rank}</td>
+                      <td className="tickercell" data-label="Stock">
+                        {p.ticker.split(".")[0]}<small>{p.name}</small>
+                      </td>
+                      <td data-label="Signal">
+                        <span className={`badge ${groupOf(p.signal)}`}>{groupLabel(p.signal)}</span>
+                      </td>
+                      <td data-label="Trade"><LiquidityChip p={p} /></td>
+                      <td data-label="News"><NewsChip p={p} /></td>
+                      <td data-label="Scenarios">
+                        <div className="bandpills">
+                          {(p.bands || []).length
+                            ? p.bands.map((b) => (
+                                <BandPill key={`${b.target_pct}_${b.horizon_days}`} band={b} baseRate={baseRateFor(b)} />
+                              ))
+                            : <span style={{ color: "var(--muted)" }}>—</span>}
+                        </div>
+                      </td>
+                      <td className="num" data-label="Buy">{fmt(p.entry_price ?? p.last_close, cur)}</td>
+                      <td className="num down" data-label="Stop">{fmt(p.stop_loss, cur)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -276,11 +246,11 @@ export default function PicksView({
       </div>
 
       <p className="disclaimer">
-        {minimal
-          ? `Browse the full ${current.label} universe. Tap a stock for details. `
-          : "Success is the historical, backtested/ML hit-rate for stocks in the same score band — not a guarantee. "}
-        Stocks marked <b>“data only”</b> didn’t pass our liquidity/history filters, so we show their
-        latest price but make <b>no prediction</b> for them. Educational/research tool, <b>not financial advice</b>.
+        {isAll
+          ? `Browse the full ${current.label} universe. Tap a stock for its trade plan & position size. `
+          : "Each stock’s pills show every profit target, its backtested success %, and how much it beats random luck. "}
+        A high success % on a small target mostly happens anyway — look at the <b>beats-luck</b> edge, not the raw %.
+        Educational tool, <b>not financial advice</b>.
       </p>
     </div>
   );
