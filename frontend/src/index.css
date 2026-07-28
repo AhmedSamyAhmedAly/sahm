@@ -306,6 +306,18 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .pill.liq-ok { background: var(--card-2); color: var(--muted); }
 .pill.liq-thin { background: rgba(255,107,107,0.14); color: var(--red); cursor: help; }
 
+/* ---------- positions add form ---------- */
+.pos-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.pos-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.pos-form input { width: 130px; }
+.pos-form button.primary { height: 38px; }
+
+.copybtn {
+  align-self: flex-start; margin-top: 2px; background: transparent; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 6px; padding: 1px 6px; font-size: 11px; cursor: pointer;
+}
+.copybtn:hover { color: var(--text); border-color: var(--accent); }
+
 @media (max-width: 820px) {
   .kpis { grid-template-columns: repeat(2, 1fr); }
   .detail-grid { grid-template-columns: 1fr; }

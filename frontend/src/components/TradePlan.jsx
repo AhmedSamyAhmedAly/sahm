@@ -1,6 +1,9 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { money } from "../format.js";
 import { currencyForTicker } from "../market.jsx";
 import { useTradeSettings, positionSize } from "../tradeSettings.js";
+import { usePositions } from "../positions.js";
 
 const RISK_CHOICES = [0.5, 1, 2];
 
@@ -10,11 +13,31 @@ function fmt(x, cur) {
   return cur === "$" ? `$${money(x)}` : `${money(x)} ${cur}`;
 }
 
+// A copy-to-clipboard button for a limit price (paste straight into your broker).
+function CopyPrice({ value }) {
+  const [done, setDone] = useState(false);
+  if (value == null) return null;
+  return (
+    <button type="button" className="copybtn" title="Copy the price for your limit order"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard?.writeText(String(value)).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 1200);
+        });
+      }}>
+      {done ? "✓ copied" : "⧉ copy"}
+    </button>
+  );
+}
+
 // The actionable trade plan for a pick: the buy/target/stop levels (as LIMIT-order
 // prices), a position-size calculator (how many shares for your risk), and the
 // plain-English reminder to confirm the live price and use limit orders.
 export default function TradePlan({ pick, ticker }) {
+  const nav = useNavigate();
   const { capital, riskPct, setCapital, setRiskPct } = useTradeSettings();
+  const { add } = usePositions();
   const cur = currencyForTicker(ticker);
 
   const entry = pick?.entry_price ?? null;
@@ -45,10 +68,12 @@ export default function TradePlan({ pick, ticker }) {
         <div className="plan-level">
           <span className="plan-label">Buy (limit) at</span>
           <b>{fmt(entry, cur)}</b>
+          <CopyPrice value={entry} />
         </div>
         <div className="plan-level up">
           <span className="plan-label">Sell target (limit) at</span>
           <b>{fmt(target, cur)}</b>
+          <CopyPrice value={target} />
           {pick.target_pct ? <small>+{Math.round(pick.target_pct * 100)}%
             {pick.horizon_days ? ` · ~${pick.horizon_days}d` : ""}</small> : null}
         </div>
@@ -103,6 +128,17 @@ export default function TradePlan({ pick, ticker }) {
           <p className="sizer-hint">Your capital is too small to buy even one share at this price.</p>
         )}
       </div>
+
+      <button type="button" className="primary" style={{ marginTop: 12 }}
+        onClick={() => {
+          add({
+            ticker, shares: size?.shares || 0, buyPrice: entry, stop, target,
+            horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
+          });
+          nav("/positions");
+        }}>
+        ＋ I bought this — track it
+      </button>
 
       <p className="disclaimer" style={{ marginTop: 12 }}>
         These are <b>plans based on last night’s close</b> — check the <b>live price</b> in your

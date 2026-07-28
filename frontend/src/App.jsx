@@ -6,6 +6,7 @@ import ProfileMenu from "./components/ProfileMenu.jsx";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import StockDetail from "./pages/StockDetail.jsx";
+import Positions from "./pages/Positions.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import Landing from "./pages/Landing.jsx";
@@ -75,6 +76,9 @@ function Nav() {
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
         Suggestions
       </NavLink>
+      <NavLink to="/positions" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+        My positions
+      </NavLink>
       <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         Track record
       </NavLink>
@@ -109,6 +113,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Home />} />
         <Route path="/stocks/:ticker" element={<Protected><StockDetail /></Protected>} />
+        <Route path="/positions" element={<Protected><Positions /></Protected>} />
         <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
         <Route path="/track-record" element={<TrackRecord />} />
