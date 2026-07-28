@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useMarket, currencyForTicker } from "../market.jsx";
 import { groupOf, groupLabel, money, prob } from "../format.js";
+import BandPill, { baseRateMap, baseRateFor as baseRateForMap } from "./BandPill.jsx";
 
 const BUY_GROUPS = ["strong_buy", "buy"];
 
@@ -45,27 +46,6 @@ function LiquidityChip({ p }) {
   return <span className={`pill ${l.cls}`} title={l.tip}>{l.label}</span>;
 }
 
-// One scenario pill: +X% target with its success % and how much it beats luck.
-function BandPill({ band, baseRate }) {
-  const pct = Math.round((band.target_pct || 0) * 100);
-  const days = band.horizon_days;
-  const p = band.prob;
-  const lift = p != null && baseRate ? p / baseRate : null;
-  const cls =
-    lift == null ? "edge-unknown" : lift >= 1.25 ? "edge-strong" : lift >= 1.08 ? "edge-mild" : "edge-none";
-  const edgeTxt =
-    lift == null ? "" : lift < 1.08 ? " · barely beats luck" : ` · ${lift.toFixed(1)}× luck`;
-  const tip =
-    p == null
-      ? `+${pct}% target`
-      : `${prob(p)} hit +${pct}% within ~${days}d${baseRate ? ` · luck alone ${Math.round(baseRate * 100)}%` : ""}${edgeTxt}${band.n ? ` · n=${band.n}` : ""}`;
-  return (
-    <span className={`band-pill ${cls}`} title={tip}>
-      +{pct}% <b>{prob(p)}</b>
-    </span>
-  );
-}
-
 /**
  * mode: "suggestions" (buy-rated, full detail + pills) | "all" (whole universe, browse)
  */
@@ -88,14 +68,7 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
   }, [market]);
 
   // Base hit-rate ("luck") per band, from the model metrics — for the edge coloring.
-  const baseRateByBand = useMemo(() => {
-    const m = {};
-    for (const mm of track?.models || []) {
-      m[`${Math.round(mm.target_pct * 100)}_${mm.horizon_days}`] = mm.base_rate;
-    }
-    return m;
-  }, [track]);
-  const baseRateFor = (band) => baseRateByBand[`${Math.round((band.target_pct || 0) * 100)}_${band.horizon_days}`];
+  const baseRates = useMemo(() => baseRateMap(track), [track]);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -207,7 +180,7 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
               <thead>
                 <tr>
                   <th>#</th><th>Stock</th><th>Signal</th><th>Trade</th><th>News</th>
-                  <th>Scenarios (target · success · beats-luck)</th>
+                  <th>Best play (target · success)</th>
                   <th className="num">Buy (limit)</th><th className="num">Stop</th>
                 </tr>
               </thead>
@@ -225,14 +198,14 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
                       </td>
                       <td data-label="Trade"><LiquidityChip p={p} /></td>
                       <td data-label="News"><NewsChip p={p} /></td>
-                      <td data-label="Scenarios">
-                        <div className="bandpills">
-                          {(p.bands || []).length
-                            ? p.bands.map((b) => (
-                                <BandPill key={`${b.target_pct}_${b.horizon_days}`} band={b} baseRate={baseRateFor(b)} />
-                              ))
-                            : <span style={{ color: "var(--muted)" }}>—</span>}
-                        </div>
+                      <td data-label="Best play">
+                        {p.target_pct != null && p.success_prob != null ? (
+                          <BandPill
+                            band={{ target_pct: p.target_pct, horizon_days: p.horizon_days,
+                                    prob: p.success_prob, n: p.success_n }}
+                            baseRate={baseRateForMap(baseRates, { target_pct: p.target_pct, horizon_days: p.horizon_days })}
+                          />
+                        ) : <span style={{ color: "var(--muted)" }}>—</span>}
                       </td>
                       <td className="num" data-label="Buy">{fmt(p.entry_price ?? p.last_close, cur)}</td>
                       <td className="num down" data-label="Stop">{fmt(p.stop_loss, cur)}</td>
@@ -248,8 +221,8 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
       <p className="disclaimer">
         {isAll
           ? `Browse the full ${current.label} universe. Tap a stock for its trade plan & position size. `
-          : "Each stock’s pills show every profit target, its backtested success %, and how much it beats random luck. "}
-        A high success % on a small target mostly happens anyway — look at the <b>beats-luck</b> edge, not the raw %.
+          : "The Best-play pill shows the target the engine judged best for the time, its backtested success %, and (by colour) how much it beats random luck. Open a stock to see all target scenarios. "}
+        A high success % on a small target mostly happens anyway — look at the <b>beats-luck</b> colour, not the raw %.
         Educational tool, <b>not financial advice</b>.
       </p>
     </div>

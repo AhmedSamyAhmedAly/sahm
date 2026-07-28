@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api.js";
 import { money } from "../format.js";
 import { currencyForTicker } from "../market.jsx";
 import { useTradeSettings, positionSize } from "../tradeSettings.js";
 import { usePositions } from "../positions.js";
+import BandPill, { baseRateMap, baseRateFor } from "./BandPill.jsx";
 
 const RISK_CHOICES = [0.5, 1, 2];
 
@@ -39,6 +41,8 @@ export default function TradePlan({ pick, ticker }) {
   const { capital, riskPct, setCapital, setRiskPct } = useTradeSettings();
   const { add } = usePositions();
   const cur = currencyForTicker(ticker);
+  const [rates, setRates] = useState({});
+  useEffect(() => { api.trackRecord().then((t) => setRates(baseRateMap(t))).catch(() => {}); }, []);
 
   const entry = pick?.entry_price ?? null;
   const target = pick?.target_price ?? null;
@@ -83,6 +87,17 @@ export default function TradePlan({ pick, ticker }) {
           <small>−{Math.round(((entry - stop) / entry) * 100)}%</small>
         </div>
       </div>
+
+      {pick.bands?.length > 0 && (
+        <div className="plan-scenarios">
+          <span className="plan-label">All target scenarios (colour = beats luck)</span>
+          <div className="bandpills">
+            {pick.bands.map((b) => (
+              <BandPill key={`${b.target_pct}_${b.horizon_days}`} band={b} baseRate={baseRateFor(rates, b)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Position sizer: how MUCH to buy so a stop-out only costs your chosen slice. */}
       <div className="sizer">
