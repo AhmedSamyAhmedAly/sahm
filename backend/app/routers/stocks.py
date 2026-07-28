@@ -14,6 +14,21 @@ from app.schemas import BarOut, StockDetail
 router = APIRouter(prefix="/api", tags=["stocks"])
 
 
+@router.get("/tickers")
+def list_tickers(
+    market: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Lightweight {ticker, name} list for the position-add dropdown. Filtered to one
+    market when given. Just two columns, so it's cheap even for a big US universe."""
+    q = select(Asset.ticker, Asset.name).where(Asset.is_listed.is_(True))
+    if market:
+        q = q.where(Asset.exchange == market.strip().upper())
+    rows = db.execute(q.order_by(Asset.ticker)).all()
+    return [{"ticker": t, "name": n} for t, n in rows]
+
+
 @router.get("/stocks/{ticker}", response_model=StockDetail)
 def stock_detail(
     ticker: str,

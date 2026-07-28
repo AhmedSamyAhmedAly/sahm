@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { money, signed } from "../format.js";
-import { currencyForTicker } from "../market.jsx";
+import { useMarket, currencyForTicker } from "../market.jsx";
 import { usePositions, positionStatus } from "../positions.js";
 
 function fmt(x, cur) {
@@ -14,9 +14,16 @@ const BLANK = { ticker: "", shares: "", buyPrice: "", stop: "", target: "", hori
 
 export default function Positions() {
   const nav = useNavigate();
+  const { market } = useMarket();
   const { positions, add, remove } = usePositions();
   const [prices, setPrices] = useState({});
   const [form, setForm] = useState(BLANK);
+  const [choices, setChoices] = useState([]);
+
+  // Ticker suggestions for the add-position dropdown (the current market's list).
+  useEffect(() => {
+    api.tickers(market).then(setChoices).catch(() => setChoices([]));
+  }, [market]);
 
   // Pull the latest price for every held ticker (few positions → a few calls).
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions]);
@@ -135,17 +142,24 @@ export default function Positions() {
       <div className="card" style={{ padding: 16 }}>
         <div className="section-title" style={{ marginTop: 0 }}>Add a position</div>
         <form onSubmit={submit} className="pos-form">
-          <label>Ticker<input placeholder="e.g. COMI.EGX / AAPL.US" value={form.ticker}
-            onChange={(e) => setForm({ ...form, ticker: e.target.value })} /></label>
+          <label>Ticker
+            <input list="ticker-list" placeholder="Search ticker or name" value={form.ticker}
+              onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
+            <datalist id="ticker-list">
+              {choices.map((c) => (
+                <option key={c.ticker} value={c.ticker}>{c.name || c.ticker}</option>
+              ))}
+            </datalist>
+          </label>
           <label>Shares<input type="number" min="0" value={form.shares}
             onChange={(e) => setForm({ ...form, shares: e.target.value })} /></label>
           <label>Buy price<input type="number" min="0" step="any" value={form.buyPrice}
             onChange={(e) => setForm({ ...form, buyPrice: e.target.value })} /></label>
-          <label>Stop (opt.)<input type="number" min="0" step="any" value={form.stop}
+          <label>Stop (optional)<input type="number" min="0" step="any" value={form.stop}
             onChange={(e) => setForm({ ...form, stop: e.target.value })} /></label>
-          <label>Target (opt.)<input type="number" min="0" step="any" value={form.target}
+          <label>Target (optional)<input type="number" min="0" step="any" value={form.target}
             onChange={(e) => setForm({ ...form, target: e.target.value })} /></label>
-          <label>Plan days (opt.)<input type="number" min="0" value={form.horizon}
+          <label>Plan days (optional)<input type="number" min="0" value={form.horizon}
             onChange={(e) => setForm({ ...form, horizon: e.target.value })} /></label>
           <button type="submit" className="primary">Add</button>
         </form>

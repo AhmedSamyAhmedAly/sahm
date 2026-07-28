@@ -74,7 +74,7 @@ function Nav() {
     <div className="nav">
       <div className="brand"><Logo /></div>
       <NavLink to="/" className={({ isActive }) => "link" + (isActive ? " active" : "")} end>
-        Suggestions
+        Stocks
       </NavLink>
       <NavLink to="/positions" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         My positions

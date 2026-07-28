@@ -42,6 +42,7 @@ export const api = {
     return request(`/api/picks${q ? `?${q}` : ""}`);
   },
   stock: (ticker) => request(`/api/stocks/${encodeURIComponent(ticker)}`),
+  tickers: (market) => request(`/api/tickers${market ? `?market=${encodeURIComponent(market)}` : ""}`),
   trackRecord: () => request("/api/track-record", { auth: false }),
 
   // ---- admin ----
