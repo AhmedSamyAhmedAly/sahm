@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useMarket } from "../market.jsx";
-import { SIGNAL_LABEL, money, prob, tickerLabel } from "../format.js";
+import { groupOf, groupLabel, money, prob, tickerLabel } from "../format.js";
 
 const BANDS = [
   { key: "auto", label: "Auto — best profit / time", target: null, horizon: null },
@@ -74,7 +74,7 @@ export default function PicksView({
     let r = data.picks;
     if (tab) r = r.filter((p) => (tab.ratings || BUY_SIGNALS).includes(p.signal));
     else if (suggestionsOnly) r = r.filter((p) => BUY_SIGNALS.includes(p.signal));
-    if (signal) r = r.filter((p) => p.signal === signal);
+    if (signal) r = r.filter((p) => groupOf(p.signal) === signal);
     if (conf.min > 0) r = r.filter((p) => (p.success_prob || 0) >= conf.min);
     if (q) {
       const s = q.toLowerCase();
@@ -158,20 +158,16 @@ export default function PicksView({
               {suggestionsOnly ? (
                 <>
                   <option value="">All buys</option>
-                  <option value="super_strong_buy">Super strong buy</option>
                   <option value="strong_buy">Strong buy</option>
                   <option value="buy">Buy</option>
                 </>
               ) : (
                 <>
                   <option value="">All signals</option>
-                  <option value="super_strong_buy">Super strong buy</option>
                   <option value="strong_buy">Strong buy</option>
                   <option value="buy">Buy</option>
                   <option value="hold">Hold</option>
                   <option value="sell">Sell</option>
-                  <option value="strong_sell">Strong sell</option>
-                  <option value="super_strong_sell">Super strong sell</option>
                 </>
               )}
             </select>
@@ -242,7 +238,7 @@ export default function PicksView({
                     </td>
                     <td data-label="Signal">
                       {p.signal
-                        ? <span className={`badge ${p.signal}`}>{SIGNAL_LABEL[p.signal]}</span>
+                        ? <span className={`badge ${groupOf(p.signal)}`}>{groupLabel(p.signal)}</span>
                         : <span className="pill" title="Did not pass the scan filters — data only">data only</span>}
                     </td>
                     <td data-label="News"><NewsChip p={p} /></td>

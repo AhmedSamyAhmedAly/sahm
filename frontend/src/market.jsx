@@ -3,14 +3,20 @@ import { createContext, useContext, useEffect, useState } from "react";
 // The markets the app can switch between. `code` matches the `exchange` column
 // in the backend (assets.exchange) and the ticker suffix (COMI.EGX, AAPL.US).
 export const MARKETS = [
-  { code: "EGX", label: "EGX", flag: "🇪🇬", name: "Egyptian Exchange" },
-  { code: "US", label: "US", flag: "🇺🇸", name: "US Stocks" },
+  { code: "EGX", label: "EGX", flag: "🇪🇬", name: "Egyptian Exchange", currency: "EGP" },
+  { code: "US", label: "US", flag: "🇺🇸", name: "US Stocks", currency: "$" },
 ];
 
 export const DEFAULT_MARKET = "EGX";
 
 export function marketByCode(code) {
   return MARKETS.find((m) => m.code === code) || MARKETS[0];
+}
+
+// Currency symbol for a namespaced ticker (COMI.EGX -> EGP, AAPL.US -> $).
+export function currencyForTicker(ticker) {
+  const suffix = (ticker || "").split(".").pop();
+  return (MARKETS.find((m) => m.code === suffix) || {}).currency || "";
 }
 
 const MarketCtx = createContext(null);

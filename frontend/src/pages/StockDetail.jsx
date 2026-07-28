@@ -12,7 +12,8 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../api.js";
-import { SIGNAL_LABEL, money, prob, signed, tickerLabel } from "../format.js";
+import TradePlan from "../components/TradePlan.jsx";
+import { groupOf, groupLabel, money, prob, signed, tickerLabel } from "../format.js";
 
 const TIMEFRAMES = [
   { label: "1D", days: 1 }, { label: "1W", days: 7 }, { label: "1M", days: 30 },
@@ -114,6 +115,13 @@ export default function StockDetail() {
         </div>
       </div>
 
+      {p && (
+        <>
+          <div className="section-title">Trade plan &amp; position size</div>
+          <TradePlan pick={p} ticker={ticker} />
+        </>
+      )}
+
       {p?.reasons?.length > 0 && (
         <>
           <div className="section-title">Why this pick</div>
@@ -173,7 +181,7 @@ export default function StockDetail() {
             {d.history.map((h, i) => (
               <tr key={i} style={{ cursor: "default" }}>
                 <td>{h.date}</td>
-                <td><span className={`badge ${h.signal}`}>{SIGNAL_LABEL[h.signal]}</span></td>
+                <td><span className={`badge ${groupOf(h.signal)}`}>{groupLabel(h.signal)}</span></td>
                 <td>{h.score}</td>
                 <td className="num">{money(h.entry_price)}</td>
                 <td>{h.hit_target == null ? <span className="pill">open</span> : h.hit_target ? <span className="up">✓ hit target</span> : <span className="down">✗ missed</span>}</td>
