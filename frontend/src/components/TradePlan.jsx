@@ -43,10 +43,9 @@ export default function TradePlan({ pick, ticker }) {
   const cur = currencyForTicker(ticker);
   const [rates, setRates] = useState({});
   useEffect(() => { api.trackRecord().then((t) => setRates(baseRateMap(t))).catch(() => {}); }, []);
-  // "I bought this" confirm step — your actual fill price/shares, editable.
-  const [buying, setBuying] = useState(false);
+  // "I bought this": choose plan entry or a custom fill price, then add.
+  const [mode, setMode] = useState("idle"); // idle | choose | custom
   const [buyPrice, setBuyPrice] = useState("");
-  const [buyShares, setBuyShares] = useState("");
 
   const entry = pick?.entry_price ?? null;
   const target = pick?.target_price ?? null;
@@ -66,6 +65,15 @@ export default function TradePlan({ pick, ticker }) {
 
   const size = positionSize({ capital, riskPct, entry, stop });
   const gainPerShare = target != null ? target - entry : null;
+
+  // Add the position at the given fill price (shares from the sizer if set).
+  const track = (price) => {
+    add({
+      ticker, shares: size?.shares || 0, buyPrice: price, stop, target,
+      horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
+    });
+    nav("/positions");
+  };
 
   return (
     <div className="card" style={{ padding: 16 }}>
@@ -154,44 +162,45 @@ export default function TradePlan({ pick, ticker }) {
         )}
       </div>
 
-      {!buying ? (
+      {mode === "idle" && (
         <button type="button" className="primary" style={{ marginTop: 12 }}
-          onClick={() => {
-            setBuyPrice(entry != null ? String(entry) : "");
-            setBuyShares(size?.shares ? String(size.shares) : "");
-            setBuying(true);
-          }}>
+          onClick={() => setMode("choose")}>
           ＋ I bought this — track it
         </button>
-      ) : (
+      )}
+      {mode === "choose" && (
         <div className="buy-confirm">
-          <span className="plan-label">Confirm what you actually got (your broker fill):</span>
+          <span className="plan-label">At what price did you buy?</span>
           <div className="buy-confirm-row">
-            <label>I bought at ({cur})
-              <input type="number" min="0" step="any" value={buyPrice}
+            <button type="button" className="primary" onClick={() => track(entry)}>
+              At plan entry — {fmt(entry, cur)}
+            </button>
+            <button type="button" className="iconbtn"
+              onClick={() => { setBuyPrice(""); setMode("custom"); }}>
+              At a custom price…
+            </button>
+            <button type="button" className="iconbtn" onClick={() => setMode("idle")}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {mode === "custom" && (
+        <div className="buy-confirm">
+          <span className="plan-label">Your actual fill:</span>
+          <div className="buy-confirm-row">
+            <label>Price ({cur})
+              <input type="number" min="0" step="any" autoFocus value={buyPrice}
                 onChange={(e) => setBuyPrice(e.target.value)} />
             </label>
-            <label>Shares
-              <input type="number" min="0" value={buyShares}
-                onChange={(e) => setBuyShares(e.target.value)} />
-            </label>
-            <button type="button" className="primary"
-              disabled={!Number(buyPrice) || !Number(buyShares)}
-              onClick={() => {
-                add({
-                  ticker, shares: Number(buyShares), buyPrice: Number(buyPrice), stop, target,
-                  horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
-                });
-                nav("/positions");
-              }}>
-              Track it
+            <button type="button" className="primary" disabled={!Number(buyPrice)}
+              onClick={() => track(Number(buyPrice))}>
+              Add
             </button>
-            <button type="button" className="iconbtn" onClick={() => setBuying(false)}>Cancel</button>
+            <button type="button" className="iconbtn" onClick={() => setMode("choose")}>Back</button>
           </div>
           {Number(buyPrice) > 0 && entry > 0 && Math.abs(Number(buyPrice) / entry - 1) > 0.02 && (
             <div className="sizer-hint">
-              ⚠ Your fill is {Math.abs((Number(buyPrice) / entry - 1) * 100).toFixed(1)}% away from the
-              planned entry — the target/stop maths shift with it. Re-check the risk before committing.
+              ⚠ That's {Math.abs((Number(buyPrice) / entry - 1) * 100).toFixed(1)}% away from the planned
+              entry — the target/stop maths shift with it.
             </div>
           )}
         </div>
