@@ -215,7 +215,9 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
               <thead>
                 <tr>
                   <th>#</th><th>Stock</th><th>Signal</th><th>Trade</th><th>News</th>
-                  <th className="num">Buy (limit)</th><th className="num">Sell target</th><th className="num">Stop</th>
+                  <th className="num">Buy (limit)</th><th className="num">Sell target</th>
+                  <th className="num" title="How often this target was hit historically — colour shows how much that beats pure luck">Confidence</th>
+                  <th className="num">Stop</th>
                 </tr>
               </thead>
               <tbody>
@@ -243,12 +245,17 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
                         {t.pct != null && (
                           <small style={{ display: "block", color: "var(--muted)", fontWeight: 400 }}>
                             +{Math.round(t.pct * 100)}%{t.days ? ` · ~${t.days}d` : ""}
-                            {t.prob != null && (
-                              <> · <span title={lift ? `${lift.toFixed(1)}× luck` : ""} style={{ color: successColor }}>
-                                {prob(t.prob)}
-                              </span></>
-                            )}
                           </small>
+                        )}
+                      </td>
+                      <td className="num" data-label="Confidence">
+                        {t.prob == null ? (
+                          <span style={{ color: "var(--muted)" }}>—</span>
+                        ) : (
+                          <span title={lift ? `${lift.toFixed(1)}× better than luck` : "vs-luck unknown"}
+                            style={{ color: successColor, fontWeight: 700 }}>
+                            {prob(t.prob)}
+                          </span>
                         )}
                       </td>
                       <td className="num down" data-label="Stop">{fmt(p.stop_loss, cur)}</td>
