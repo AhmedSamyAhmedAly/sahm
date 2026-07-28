@@ -267,6 +267,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .plan-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
 
 .plan-scenarios { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.edge-legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.edge-legend .band-pill { cursor: default; font-size: 11px; }
+
+.buy-confirm { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.buy-confirm-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.buy-confirm-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.buy-confirm-row input { width: 130px; }
 .sizer { border-top: 1px solid var(--border); padding-top: 12px; }
 .sizer-inputs { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
 .sizer-inputs label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }

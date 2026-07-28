@@ -43,6 +43,10 @@ export default function TradePlan({ pick, ticker }) {
   const cur = currencyForTicker(ticker);
   const [rates, setRates] = useState({});
   useEffect(() => { api.trackRecord().then((t) => setRates(baseRateMap(t))).catch(() => {}); }, []);
+  // "I bought this" confirm step — your actual fill price/shares, editable.
+  const [buying, setBuying] = useState(false);
+  const [buyPrice, setBuyPrice] = useState("");
+  const [buyShares, setBuyShares] = useState("");
 
   const entry = pick?.entry_price ?? null;
   const target = pick?.target_price ?? null;
@@ -90,11 +94,17 @@ export default function TradePlan({ pick, ticker }) {
 
       {pick.bands?.length > 0 && (
         <div className="plan-scenarios">
-          <span className="plan-label">All target scenarios (colour = beats luck)</span>
+          <span className="plan-label">All target scenarios</span>
           <div className="bandpills">
             {pick.bands.map((b) => (
               <BandPill key={`${b.target_pct}_${b.horizon_days}`} band={b} baseRate={baseRateFor(rates, b)} />
             ))}
+          </div>
+          <div className="edge-legend">
+            <span className="plan-label">Colour = how much the success % beats pure luck:</span>
+            <span className="band-pill edge-strong">real skill (≥1.25× luck)</span>
+            <span className="band-pill edge-mild">some edge (≥1.08×)</span>
+            <span className="band-pill edge-none">mostly luck (&lt;1.08×)</span>
           </div>
         </div>
       )}
@@ -144,16 +154,48 @@ export default function TradePlan({ pick, ticker }) {
         )}
       </div>
 
-      <button type="button" className="primary" style={{ marginTop: 12 }}
-        onClick={() => {
-          add({
-            ticker, shares: size?.shares || 0, buyPrice: entry, stop, target,
-            horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
-          });
-          nav("/positions");
-        }}>
-        ＋ I bought this — track it
-      </button>
+      {!buying ? (
+        <button type="button" className="primary" style={{ marginTop: 12 }}
+          onClick={() => {
+            setBuyPrice(entry != null ? String(entry) : "");
+            setBuyShares(size?.shares ? String(size.shares) : "");
+            setBuying(true);
+          }}>
+          ＋ I bought this — track it
+        </button>
+      ) : (
+        <div className="buy-confirm">
+          <span className="plan-label">Confirm what you actually got (your broker fill):</span>
+          <div className="buy-confirm-row">
+            <label>I bought at ({cur})
+              <input type="number" min="0" step="any" value={buyPrice}
+                onChange={(e) => setBuyPrice(e.target.value)} />
+            </label>
+            <label>Shares
+              <input type="number" min="0" value={buyShares}
+                onChange={(e) => setBuyShares(e.target.value)} />
+            </label>
+            <button type="button" className="primary"
+              disabled={!Number(buyPrice) || !Number(buyShares)}
+              onClick={() => {
+                add({
+                  ticker, shares: Number(buyShares), buyPrice: Number(buyPrice), stop, target,
+                  horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
+                });
+                nav("/positions");
+              }}>
+              Track it
+            </button>
+            <button type="button" className="iconbtn" onClick={() => setBuying(false)}>Cancel</button>
+          </div>
+          {Number(buyPrice) > 0 && entry > 0 && Math.abs(Number(buyPrice) / entry - 1) > 0.02 && (
+            <div className="sizer-hint">
+              ⚠ Your fill is {Math.abs((Number(buyPrice) / entry - 1) * 100).toFixed(1)}% away from the
+              planned entry — the target/stop maths shift with it. Re-check the risk before committing.
+            </div>
+          )}
+        </div>
+      )}
 
       <p className="disclaimer" style={{ marginTop: 12 }}>
         These are <b>plans based on last night’s close</b> — check the <b>live price</b> in your
