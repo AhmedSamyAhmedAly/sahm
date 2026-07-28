@@ -58,6 +58,7 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
   const [q, setQ] = useState("");
   const [minConf, setMinConf] = useState(0);
   const [sort, setSort] = useState("rank");
+  const [band, setBand] = useState("auto"); // "auto" or "<pct>_<days>" — the Sell-target view
   const isAll = mode === "all";
 
   useEffect(() => {
@@ -69,6 +70,29 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
 
   // Base hit-rate ("luck") per band, from the model metrics — for the edge coloring.
   const baseRates = useMemo(() => baseRateMap(track), [track]);
+
+  // The target/time pairs the model actually measured (for the Sell-target selector).
+  const bandOptions = useMemo(() => {
+    const seen = new Map();
+    for (const p of data?.picks || [])
+      for (const b of p.bands || []) {
+        const k = `${b.target_pct}_${b.horizon_days}`;
+        if (!seen.has(k)) seen.set(k, { target_pct: b.target_pct, horizon_days: b.horizon_days });
+      }
+    return [...seen.values()].sort((a, b) => a.target_pct - b.target_pct);
+  }, [data]);
+
+  // The Sell target shown for a pick, honouring the selected band ("auto" = the
+  // engine's headline; otherwise recompute price = entry x (1+target) and use that
+  // band's measured success %).
+  const targetFor = (p) => {
+    if (band === "auto")
+      return { pct: p.target_pct, days: p.horizon_days, price: p.target_price, prob: p.success_prob };
+    const [pct, days] = band.split("_").map(Number);
+    const bd = (p.bands || []).find((b) => b.target_pct === pct && b.horizon_days === days);
+    const price = p.entry_price != null ? p.entry_price * (1 + pct) : null;
+    return { pct, days, price, prob: bd ? bd.prob : null };
+  };
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -143,6 +167,16 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
           {!isAll && (
+            <select value={band} onChange={(e) => setBand(e.target.value)} title="Which profit target to show as the Sell target">
+              <option value="auto">Sell target: Best (auto)</option>
+              {bandOptions.map((b) => (
+                <option key={`${b.target_pct}_${b.horizon_days}`} value={`${b.target_pct}_${b.horizon_days}`}>
+                  Sell target: +{Math.round(b.target_pct * 100)}% · ~{b.horizon_days}d
+                </option>
+              ))}
+            </select>
+          )}
+          {!isAll && (
             <select value={minConf} onChange={(e) => setMinConf(Number(e.target.value))}>
               <option value={0}>Any confidence</option>
               <option value={0.8}>≥ 80% confident</option>
@@ -187,8 +221,9 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
               <tbody>
                 {rows.map((p) => {
                   const cur = currencyForTicker(p.ticker);
-                  const br = baseRateForMap(baseRates, { target_pct: p.target_pct, horizon_days: p.horizon_days });
-                  const lift = p.success_prob != null && br ? p.success_prob / br : null;
+                  const t = targetFor(p);
+                  const br = baseRateForMap(baseRates, { target_pct: t.pct, horizon_days: t.days });
+                  const lift = t.prob != null && br ? t.prob / br : null;
                   const successColor =
                     lift == null ? "var(--muted)" : lift >= 1.25 ? "var(--accent)" : lift >= 1.08 ? "var(--text)" : "var(--muted)";
                   return (
@@ -204,13 +239,13 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
                       <td data-label="News"><NewsChip p={p} /></td>
                       <td className="num" data-label="Buy">{fmt(p.entry_price ?? p.last_close, cur)}</td>
                       <td className="num up" data-label="Sell target">
-                        {fmt(p.target_price, cur)}
-                        {p.target_pct != null && (
+                        {fmt(t.price, cur)}
+                        {t.pct != null && (
                           <small style={{ display: "block", color: "var(--muted)", fontWeight: 400 }}>
-                            +{Math.round(p.target_pct * 100)}%{p.horizon_days ? ` · ~${p.horizon_days}d` : ""}
-                            {p.success_prob != null && (
+                            +{Math.round(t.pct * 100)}%{t.days ? ` · ~${t.days}d` : ""}
+                            {t.prob != null && (
                               <> · <span title={lift ? `${lift.toFixed(1)}× luck` : ""} style={{ color: successColor }}>
-                                {prob(p.success_prob)}
+                                {prob(t.prob)}
                               </span></>
                             )}
                           </small>
