@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useMarket, currencyForTicker } from "../market.jsx";
 import { groupOf, groupLabel, money, prob } from "../format.js";
-import BandPill, { baseRateMap, baseRateFor as baseRateForMap } from "./BandPill.jsx";
+import { baseRateMap, baseRateFor as baseRateForMap } from "./BandPill.jsx";
 
 const BUY_GROUPS = ["strong_buy", "buy"];
 
@@ -128,8 +128,9 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
       {!isAll && (
         <div className="trade-note">
           These are <b>plans based on last night’s close</b>. Check the <b>live price</b> in your broker
-          and use a <b>limit buy</b> at the Buy price (never “buy at market”). Each pill shows the success %
-          and how much it <b>beats luck</b> — a high % that barely beats luck isn’t skill.
+          and use a <b>limit buy</b> at the Buy price and a <b>limit sell</b> at the Sell target (never “at market”).
+          The small % under the Sell target is how often it’s hit — its <b>colour shows how much it beats luck</b>,
+          which matters more than the raw %.
         </div>
       )}
 
@@ -180,13 +181,16 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
               <thead>
                 <tr>
                   <th>#</th><th>Stock</th><th>Signal</th><th>Trade</th><th>News</th>
-                  <th>Best play (target · success)</th>
-                  <th className="num">Buy (limit)</th><th className="num">Stop</th>
+                  <th className="num">Buy (limit)</th><th className="num">Sell target</th><th className="num">Stop</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((p) => {
                   const cur = currencyForTicker(p.ticker);
+                  const br = baseRateForMap(baseRates, { target_pct: p.target_pct, horizon_days: p.horizon_days });
+                  const lift = p.success_prob != null && br ? p.success_prob / br : null;
+                  const successColor =
+                    lift == null ? "var(--muted)" : lift >= 1.25 ? "var(--accent)" : lift >= 1.08 ? "var(--text)" : "var(--muted)";
                   return (
                     <tr key={p.ticker} onClick={() => nav(`/stocks/${p.ticker}`)}>
                       <td className="num" data-label="#">{p.rank}</td>
@@ -198,16 +202,20 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
                       </td>
                       <td data-label="Trade"><LiquidityChip p={p} /></td>
                       <td data-label="News"><NewsChip p={p} /></td>
-                      <td data-label="Best play">
-                        {p.target_pct != null && p.success_prob != null ? (
-                          <BandPill
-                            band={{ target_pct: p.target_pct, horizon_days: p.horizon_days,
-                                    prob: p.success_prob, n: p.success_n }}
-                            baseRate={baseRateForMap(baseRates, { target_pct: p.target_pct, horizon_days: p.horizon_days })}
-                          />
-                        ) : <span style={{ color: "var(--muted)" }}>—</span>}
-                      </td>
                       <td className="num" data-label="Buy">{fmt(p.entry_price ?? p.last_close, cur)}</td>
+                      <td className="num up" data-label="Sell target">
+                        {fmt(p.target_price, cur)}
+                        {p.target_pct != null && (
+                          <small style={{ display: "block", color: "var(--muted)", fontWeight: 400 }}>
+                            +{Math.round(p.target_pct * 100)}%{p.horizon_days ? ` · ~${p.horizon_days}d` : ""}
+                            {p.success_prob != null && (
+                              <> · <span title={lift ? `${lift.toFixed(1)}× luck` : ""} style={{ color: successColor }}>
+                                {prob(p.success_prob)}
+                              </span></>
+                            )}
+                          </small>
+                        )}
+                      </td>
                       <td className="num down" data-label="Stop">{fmt(p.stop_loss, cur)}</td>
                     </tr>
                   );
@@ -221,7 +229,7 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
       <p className="disclaimer">
         {isAll
           ? `Browse the full ${current.label} universe. Tap a stock for its trade plan & position size. `
-          : "The Best-play pill shows the target the engine judged best for the time, its backtested success %, and (by colour) how much it beats random luck. Open a stock to see all target scenarios. "}
+          : "Buy / Sell target / Stop are the plan prices (use limit orders). The % under the Sell target is how often that target is hit; its colour shows how much it beats random luck. Open a stock for all target scenarios & position size. "}
         A high success % on a small target mostly happens anyway — look at the <b>beats-luck</b> colour, not the raw %.
         Educational tool, <b>not financial advice</b>.
       </p>
