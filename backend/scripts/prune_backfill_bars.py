@@ -29,6 +29,9 @@ from app.models import Asset, DailyBar  # noqa: E402
 ACTIVE_DAYS = int(os.environ.get("ACTIVE_DAYS", "380"))     # ~260 trading days (1Y chart)
 INACTIVE_DAYS = int(os.environ.get("INACTIVE_DAYS", "45"))  # last-price + liquidity window
 BATCH = 300
+# Stop inserting if the serving DB approaches its storage cap (Neon free = 512 MB).
+# Active (tradeable) tickers are filled FIRST, so a stop only costs junk-ticker bars.
+MAX_DB_MB = int(os.environ.get("MAX_DB_MB", "0"))  # 0 = no cap
 
 
 def _insert(engine, table, rows):
@@ -90,11 +93,21 @@ def process_market(tgt, src, market: str) -> None:
             select(Asset.ticker).where(Asset.exchange == market)).all()}
 
     total = 0
-    todo = list(local_assets.items())
+    # ACTIVE (tradeable) first: if we hit the storage cap, we lose only junk-ticker
+    # bars, never the charts of stocks the app actually recommends.
+    todo = sorted(local_assets.items(), key=lambda kv: not kv[1])
     with src.connect() as s:
         for i, (ticker, is_active) in enumerate(todo):
             if ticker not in neon_tickers:
                 continue  # asset row must exist first (push_serving handles new assets)
+            if MAX_DB_MB and i % 200 == 0:
+                with tgt.connect() as c:
+                    mb = c.execute(text(
+                        "SELECT pg_database_size(current_database())/1024/1024")).scalar()
+                if mb >= MAX_DB_MB:
+                    print(f"  ⚠ storage cap reached ({mb} MB >= {MAX_DB_MB}); stopping backfill "
+                          f"after {total} rows (active tickers were filled first)")
+                    break
             floor = act_floor if is_active else inact_floor
             start = neon_max.get(ticker)
             lo = max(floor, start + dt.timedelta(days=1)) if start else floor
@@ -105,7 +118,11 @@ def process_market(tgt, src, market: str) -> None:
                 continue
             for r in rows:
                 r.pop("id", None)
-            _insert(tgt, DailyBar.__table__, rows)
+            try:
+                _insert(tgt, DailyBar.__table__, rows)
+            except Exception as e:  # noqa: BLE001 — out of space: stop cleanly, keep what we have
+                print(f"  ⚠ insert stopped at {ticker}: {type(e).__name__} — {total} rows written")
+                break
             total += len(rows)
             if (i + 1) % 500 == 0:
                 print(f"  …{i + 1}/{len(todo)} tickers, {total} rows so far")
