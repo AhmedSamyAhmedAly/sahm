@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, func, insert, select, text  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, normalize_db_url  # noqa: E402
 from app.models import Asset, DailyBar, Outcome, Recommendation  # noqa: E402
 
 # Local history file to read the serving slice from. Defaults to the EGX cache;
@@ -60,7 +60,7 @@ def _rec_map(conn) -> dict:
 def main() -> None:
     ex = settings.exchange  # active market (MARKET env; default EGX)
     url = os.environ["DATABASE_URL"]
-    tgt = create_engine(url, pool_pre_ping=True, insertmanyvalues_page_size=80)
+    tgt = create_engine(normalize_db_url(url), pool_pre_ping=True, insertmanyvalues_page_size=80)
     src = create_engine(SRC)
     Base.metadata.create_all(bind=tgt)
 

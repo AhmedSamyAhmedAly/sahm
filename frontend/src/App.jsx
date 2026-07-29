@@ -79,9 +79,11 @@ function Nav() {
       <NavLink to="/positions" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
         My positions
       </NavLink>
-      <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
-        Track record
-      </NavLink>
+      {user.role === "admin" && (
+        <NavLink to="/track-record" className={({ isActive }) => "link" + (isActive ? " active" : "")}>
+          Track record
+        </NavLink>
+      )}
       <MarketsDropdown />
       {user.role === "admin" && <AdminDropdown />}
       <div className="spacer" />
@@ -116,7 +118,9 @@ export default function App() {
         <Route path="/positions" element={<Protected><Positions /></Protected>} />
         <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
-        <Route path="/track-record" element={<TrackRecord />} />
+        {/* Admin-only: the raw model metrics are internal. The pill colours still
+            work for everyone — they read the same endpoint directly. */}
+        <Route path="/track-record" element={<Protected adminOnly><TrackRecord /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Footer />

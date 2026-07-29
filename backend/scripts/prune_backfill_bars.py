@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import create_engine, func, select, text  # noqa: E402
 
+from app.database import normalize_db_url  # noqa: E402
 from app.models import Asset, DailyBar  # noqa: E402
 
 ACTIVE_DAYS = int(os.environ.get("ACTIVE_DAYS", "380"))     # ~260 trading days (1Y chart)
@@ -130,7 +131,7 @@ def process_market(tgt, src, market: str) -> None:
 
 
 def main() -> None:
-    tgt = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True,
+    tgt = create_engine(normalize_db_url(os.environ["DATABASE_URL"]), pool_pre_ping=True,
                         insertmanyvalues_page_size=80)
     src = create_engine(os.environ.get("LOCAL_DB_URL", "sqlite:///./sahm.db"))
     want = os.environ.get("MARKET", "ALL").upper()

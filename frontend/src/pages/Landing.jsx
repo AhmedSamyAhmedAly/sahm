@@ -30,7 +30,6 @@ export default function Landing() {
         </p>
         <div className="landing-cta">
           <Link to="/login" className="btn-primary">Get started — free</Link>
-          <Link to="/track-record" className="btn-ghost">See the track record</Link>
         </div>
       </header>
 

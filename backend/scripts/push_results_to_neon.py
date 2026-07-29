@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, insert, select, text  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, normalize_db_url  # noqa: E402
 from app.models import BacktestStat, ModelVersion  # noqa: E402
 
 # Local history file to read results from. Defaults to the EGX cache; the US job
@@ -54,7 +54,7 @@ def _insert_with_retry(engine, table, rows, label):
 def main() -> None:
     ex = settings.exchange  # active market (MARKET env; default EGX)
     url = os.environ["DATABASE_URL"]
-    tgt = create_engine(url, pool_pre_ping=True, insertmanyvalues_page_size=80)
+    tgt = create_engine(normalize_db_url(url), pool_pre_ping=True, insertmanyvalues_page_size=80)
     src = create_engine(SRC)
 
     # create_all + self-heal the per-market `exchange` column on Neon before we scope.

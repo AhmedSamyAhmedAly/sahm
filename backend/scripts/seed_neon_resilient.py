@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import create_engine, insert, select, text  # noqa: E402
 
-from app.database import Base  # noqa: E402
+from app.database import Base, normalize_db_url  # noqa: E402
 from app.models import Asset, DailyBar  # noqa: E402
 
 SRC = "sqlite:///./sahm.db"
@@ -45,7 +45,7 @@ def _insert_with_retry(engine, table, rows, label):
 def main() -> None:
     url = os.environ["DATABASE_URL"]
     # Small page size => small statements Neon won't drop; pre_ping reconnects.
-    tgt = create_engine(url, pool_pre_ping=True, insertmanyvalues_page_size=100)
+    tgt = create_engine(normalize_db_url(url), pool_pre_ping=True, insertmanyvalues_page_size=100)
     src = create_engine(SRC)
 
     Base.metadata.create_all(bind=tgt)
