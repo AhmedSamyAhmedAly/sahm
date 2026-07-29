@@ -1,4 +1,4 @@
-/* Saaed service worker — deliberately conservative so it can NEVER pin users to a
+/* Saeed service worker — deliberately conservative so it can NEVER pin users to a
    stale app: network-first for pages/API, cache-first only for immutable hashed
    assets (Vite emits content-hashed files in /assets/). */
 const CACHE = "saaed-v1";

@@ -25,7 +25,7 @@ export default function Landing() {
         <div className="landing-brand"><Logo /></div>
         <h1>Daily EGX signals you can actually check.</h1>
         <p className="landing-sub">
-          Saaed scans the whole Egyptian Exchange every morning and gives you the highest‑confidence
+          Saeed scans the whole Egyptian Exchange every morning and gives you the highest‑confidence
           buys — with an honest, <b>backtested and live‑graded</b> success rate. No hype, no hidden results.
         </p>
         <div className="landing-cta">

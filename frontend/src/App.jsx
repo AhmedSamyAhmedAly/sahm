@@ -127,7 +127,7 @@ export default function App() {
 function Footer() {
   return (
     <div className="footer">
-      <span>Saaed · educational tool, not financial advice</span>
+      <span>Saeed · educational tool, not financial advice</span>
       <span className="spacer" />
     </div>
   );

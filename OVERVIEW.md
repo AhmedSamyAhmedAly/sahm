@@ -1,6 +1,6 @@
-# Saaed — EGX Stock Signals 📈
+# Saeed — EGX Stock Signals 📈
 
-**Saaed** (written **Sa📈d** — the green rising chart in the logo) is a private web app for me and
+**Saeed** (written **Sa📈d** — the green rising chart in the logo) is a private web app for me and
 my friends that scans the **Egyptian Exchange (EGX)** every trading day and surfaces the stocks with
 the strongest setups — each with an **honest, backtested success rate** and a clear **buy / target /
 stop** plan, plus a personal **portfolio** tracker.
@@ -8,7 +8,7 @@ stop** plan, plus a personal **portfolio** tracker.
 🔗 **Live app:** https://sahmfe.vercel.app
 🔑 **To join:** open the link → *Register with invite* → invite code **`sahm-invite`** → set a budget.
 
-> ⚠️ **Not financial advice.** Everything in Saaed is an algorithmic *suggestion* that **can be wrong**.
+> ⚠️ **Not financial advice.** Everything in Saeed is an algorithmic *suggestion* that **can be wrong**.
 > It tips the odds, it doesn't remove risk. You review and place every trade yourself. Trading can
 > lose money.
 
@@ -16,7 +16,7 @@ stop** plan, plus a personal **portfolio** tracker.
 
 ## What it actually does
 
-Every trading morning (before the market opens) Saaed:
+Every trading morning (before the market opens) Saeed:
 1. Pulls the latest end-of-day prices for the whole EGX from a market-data provider.
 2. Scores every liquid stock 0–100 from transparent technical rules (trend, momentum, volume, breakout).
 3. Runs a machine-learning model (trained on **16 years** of EGX history) to estimate the **probability**
@@ -59,7 +59,7 @@ lying). About half still miss, which is exactly why stops and diversification ma
 ---
 
 ## Markets
-Saaed is **multi-market**. A **Markets** switcher (top nav) flips the whole app between
+Saeed is **multi-market**. A **Markets** switcher (top nav) flips the whole app between
 the **Egyptian Exchange (EGX)** and **US stocks** — each with its own universe, its own
 pre-open daily scan, and its own models, all kept separate in one database (details:
 [`docs/US_MARKET.md`](docs/US_MARKET.md)). Add a market by dropping a profile into

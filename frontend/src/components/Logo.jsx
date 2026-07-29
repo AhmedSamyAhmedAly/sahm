@@ -1,4 +1,4 @@
-// "Saaed" stylized: Sa + a green rising-chart glyph (the middle letter) + ed.
+// "Saeed" stylized: Sa + a green rising-chart glyph (the middle letter) + ed.
 export default function Logo({ size = "1em" }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", letterSpacing: "0.3px" }}>

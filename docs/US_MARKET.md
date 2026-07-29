@@ -1,6 +1,6 @@
 # Adding the US market 🇺🇸
 
-Saaed is now **multi-market**. The same engine (features → score → backtested
+Saeed is now **multi-market**. The same engine (features → score → backtested
 probability → ML → levels → news) runs per **exchange**, with EGX and US kept fully
 separate in the *same* database. This doc explains how it's wired and the steps to
 turn the US market on.
