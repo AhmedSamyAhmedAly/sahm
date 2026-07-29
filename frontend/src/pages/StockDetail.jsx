@@ -118,7 +118,9 @@ export default function StockDetail() {
       {p && (
         <>
           <div className="section-title">Trade plan &amp; position size</div>
-          <TradePlan pick={p} ticker={ticker} />
+          {/* key=ticker: switching stocks (or leaving and coming back) remounts the
+              card, so the "I bought this" form always starts fresh. */}
+          <TradePlan key={ticker} pick={p} ticker={ticker} />
         </>
       )}
 
