@@ -26,3 +26,7 @@ Thumbs.db
 # local one-off helper scripts (contain machine-specific paths)
 backend/run_us_*.sh
 backend/*.log
+
+# local credential scratch file
+backend/ADMIN_LOGIN.txt
+backend/run_migrate.sh
