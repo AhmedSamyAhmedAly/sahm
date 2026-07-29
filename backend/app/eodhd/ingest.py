@@ -97,20 +97,29 @@ def refresh_assets(client: EODHDClient, db: Session) -> list[str]:
 
 
 def ingest_prices(client: EODHDClient, db: Session, tickers: list[str],
-                  full_history: bool = True) -> int:
+                  full_history: bool = True, max_backfill_days: int | None = None) -> int:
     """Fetch EOD bars per ticker and insert any that are missing.
 
     full_history=True pulls everything EODHD has (needed for the backtest).
     Otherwise it tops up from the latest stored bar.
+
+    `max_backfill_days` bounds how far back a top-up may reach for a ticker that has
+    NO bars yet. Without it such a ticker silently pulls its entire history — which
+    is right for a training cache, but floods a serving database that deliberately
+    keeps only a chart window. Defaults to `settings.min_history_days * 2`, enough
+    for the indicators (they need `MIN_BARS` of history) plus warm-up.
     """
+    if max_backfill_days is None:
+        max_backfill_days = max(settings.min_history_days * 2, 380)
     inserted = 0
     for ticker in tickers:
         last = db.execute(
             select(func.max(DailyBar.date)).where(DailyBar.ticker == ticker)
         ).scalar()
         start = None
-        if not full_history and last:
-            start = last - dt.timedelta(days=5)  # small overlap, deduped below
+        if not full_history:
+            start = (last - dt.timedelta(days=5) if last            # small overlap, deduped below
+                     else dt.date.today() - dt.timedelta(days=max_backfill_days))
         try:
             bars = client.eod(ticker, start=start)
         except Exception:
