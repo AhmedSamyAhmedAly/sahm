@@ -1,17 +1,17 @@
-// Shared, persisted trade settings (your capital + how much you'll risk per trade)
-// and the position-size math. Kept in localStorage so every pick can size itself,
-// and synced across components via a tiny event.
+// Shared trade settings (your capital + how much you'll risk per trade) and the
+// position-size math. Kept IN MEMORY only — they follow you while you browse the
+// app, but a refresh or closing the tab clears them (nothing is stored).
 import { useEffect, useState } from "react";
 
-const CAP_KEY = "sahm_capital";
-const RISK_KEY = "sahm_risk_pct";
 const EVT = "sahm-trade-settings";
+let _capital = 0;
+let _riskPct = 1; // default: risk 1% of capital per trade
 
-export const getCapital = () => Number(localStorage.getItem(CAP_KEY)) || 0;
-export const getRiskPct = () => {
-  const v = Number(localStorage.getItem(RISK_KEY));
-  return v > 0 ? v : 1; // default: risk 1% of capital per trade
-};
+// Clean up values saved by the old persisted version.
+try { localStorage.removeItem("sahm_capital"); localStorage.removeItem("sahm_risk_pct"); } catch { /* ignore */ }
+
+export const getCapital = () => _capital;
+export const getRiskPct = () => _riskPct;
 
 export function useTradeSettings() {
   const [capital, setCap] = useState(getCapital);
@@ -19,18 +19,14 @@ export function useTradeSettings() {
   useEffect(() => {
     const sync = () => { setCap(getCapital()); setRisk(getRiskPct()); };
     window.addEventListener(EVT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(EVT, sync);
-      window.removeEventListener("storage", sync);
-    };
+    return () => window.removeEventListener(EVT, sync);
   }, []);
   const setCapital = (v) => {
-    localStorage.setItem(CAP_KEY, String(Math.max(0, Number(v) || 0)));
+    _capital = Math.max(0, Number(v) || 0);
     window.dispatchEvent(new Event(EVT));
   };
   const setRiskPct = (v) => {
-    localStorage.setItem(RISK_KEY, String(Number(v) || 1));
+    _riskPct = Number(v) || 1;
     window.dispatchEvent(new Event(EVT));
   };
   return { capital, riskPct, setCapital, setRiskPct };
