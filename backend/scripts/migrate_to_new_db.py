@@ -31,8 +31,11 @@ from app.models import (  # noqa: E402
     Asset, BacktestStat, DailyBar, ModelVersion, Outcome, Recommendation, User,
 )
 
-CHART_DAYS = int(os.environ.get("CHART_DAYS", "380"))       # active tickers (~1Y)
-INACTIVE_CHART_DAYS = int(os.environ.get("INACTIVE_CHART_DAYS", "45"))
+# Chart history to load per ticker. Railway charges ~$0.15/GB-month with no hard cap,
+# so every stock gets a full year (the Neon-era short window for illiquid names is no
+# longer needed). Tradeable names are still loaded first.
+CHART_DAYS = int(os.environ.get("CHART_DAYS", "380"))                    # ~1Y, tradeable
+INACTIVE_CHART_DAYS = int(os.environ.get("INACTIVE_CHART_DAYS", "380"))  # ~1Y, the rest
 BATCH = 300
 
 
