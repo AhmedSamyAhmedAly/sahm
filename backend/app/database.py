@@ -23,7 +23,22 @@ def _engine_kwargs(url: str) -> dict:
     return {"pool_pre_ping": True}
 
 
-engine = create_engine(settings.database_url, **_engine_kwargs(settings.database_url))
+def normalize_db_url(url: str) -> str:
+    """Force the psycopg (v3) driver on Postgres URLs.
+
+    Hosts hand out bare ``postgres://`` / ``postgresql://`` URLs, which SQLAlchemy
+    maps to psycopg2 — a driver we don't install (we ship psycopg 3). Rewriting the
+    scheme here means any provider's connection string works as-is.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+    return url
+
+
+DB_URL = normalize_db_url(settings.database_url)
+engine = create_engine(DB_URL, **_engine_kwargs(DB_URL))
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
