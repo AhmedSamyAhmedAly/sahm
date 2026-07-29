@@ -106,6 +106,20 @@ so you can keep granting access by hand in the meantime.
 
 ## Step D — the webhook (this is what keeps renewals working)
 
+### ✅ Recommended: run the script
+
+```powershell
+cd C:\Users\knagd\OneDrive\Desktop\sahm-main\backend
+$env:WEBHOOK_URL = "https://<your-backend>.up.railway.app/api/billing/webhook"
+python scripts/paypal_setup_webhook.py
+```
+
+It registers the webhook with exactly the events the code handles (re-running
+updates an existing one instead of duplicating it) and prints the
+`PAYPAL_WEBHOOK_ID=...` line to paste into Railway.
+
+### Or by hand
+
 1. PayPal dashboard → your app → **Webhooks → Add webhook**
 2. URL: `https://<your-backend>.up.railway.app/api/billing/webhook`
 3. Subscribe to these events:
