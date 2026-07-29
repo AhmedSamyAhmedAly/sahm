@@ -10,7 +10,11 @@ from pydantic import BaseModel, EmailStr
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
-    invite_code: str
+    invite_code: str = ""
+    # The plan the visitor picked on the register form. Stored as INTENT only —
+    # access is granted after payment (or an admin grant), never at signup.
+    plan: str | None = None
+    period: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -23,6 +27,29 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+# ---- billing / subscriptions ----
+class ActivateSubscriptionRequest(BaseModel):
+    subscription_id: str
+
+
+class SubscriptionOut(BaseModel):
+    plan: str | None = None
+    plan_until: dt.datetime | None = None
+    plan_source: str | None = None
+    active: bool = False
+    markets: list[str] = []
+    role: str = "member"
+    needs_payment: bool = True
+
+
+class GrantSubscriptionRequest(BaseModel):
+    """Admin: give (or revoke) a plan without payment."""
+    plan: str | None = None          # egx | us | both | None to revoke
+    days: int | None = None          # length from now; ignored if `until` given
+    until: dt.datetime | None = None
+    note: str | None = None
+
+
 # ---- admin ----
 class AdminUserOut(BaseModel):
     id: int
@@ -32,6 +59,12 @@ class AdminUserOut(BaseModel):
     is_primary: bool = False   # the protected bootstrap admin (ADMIN_EMAIL)
     created_at: dt.datetime | None = None
     last_login_at: dt.datetime | None = None
+    # subscription state
+    plan: str | None = None
+    plan_until: dt.datetime | None = None
+    plan_source: str | None = None
+    subscription_active: bool = False
+    markets: list[str] = []
 
 
 class CreateUserRequest(BaseModel):
@@ -63,6 +96,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     email: str
     role: str
+    # Entitlement, so the SPA can gate markets without a second round-trip.
+    plan: str | None = None
+    plan_until: dt.datetime | None = None
+    markets: list[str] = []
+    needs_payment: bool = False
 
 
 # ---- picks / stocks ----

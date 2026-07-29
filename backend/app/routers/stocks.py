@@ -6,8 +6,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_market_access
 from app.models import Asset, DailyBar, Outcome, Recommendation, User
+from app.plans import allowed_markets
 from app.routers.picks import _to_pick
 from app.schemas import BarOut, StockDetail
 
@@ -20,11 +21,19 @@ def list_tickers(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Lightweight {ticker, name} list for the position-add dropdown. Filtered to one
-    market when given. Just two columns, so it's cheap even for a big US universe."""
-    q = select(Asset.ticker, Asset.name).where(Asset.is_listed.is_(True))
-    if market:
-        q = q.where(Asset.exchange == market.strip().upper())
+    """Lightweight {ticker, name} list for the position picker. Filtered to one
+    market when given. Just two columns, so it's cheap even for a big US universe.
+
+    Restricted to the markets the plan covers — but returns an empty list rather
+    than 402, so the picker simply shows fewer names instead of erroring."""
+    allowed = allowed_markets(user)
+    want = market.strip().upper() if market else None
+    if want and want not in allowed:
+        return []
+    q = select(Asset.ticker, Asset.name).where(
+        Asset.is_listed.is_(True),
+        Asset.exchange.in_([want] if want else allowed or ["__none__"]),
+    )
     rows = db.execute(q.order_by(Asset.ticker)).all()
     return [{"ticker": t, "name": n} for t, n in rows]
 
@@ -39,6 +48,8 @@ def stock_detail(
     asset = db.execute(select(Asset).where(Asset.ticker == ticker)).scalar_one_or_none()
     if asset is None:
         raise HTTPException(status_code=404, detail="Unknown ticker")
+    # Paywall: this stock's market must be covered by the plan.
+    require_market_access(user, asset.exchange)
 
     bar_rows = db.execute(
         select(DailyBar.date, DailyBar.open, DailyBar.high, DailyBar.low,

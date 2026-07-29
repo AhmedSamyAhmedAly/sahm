@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, require_market_access
 from app.models import Asset, DailyBar, Recommendation, User
 from app.schemas import PickOut, PicksResponse
 
@@ -150,6 +150,8 @@ def get_picks(
     # column and tickers are namespaced (COMI.EGX, AAPL.US), so every count/query
     # below is filtered to the requested market when one is given.
     mkt = market.strip().upper() if market else None
+    # Paywall: market data requires an active plan covering this market.
+    require_market_access(user, mkt)
 
     # Latest scan date *within this market* — a market with no scan yet (e.g. US
     # before its pipeline runs) returns None here and yields an empty, honest response.

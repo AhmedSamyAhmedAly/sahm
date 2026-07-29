@@ -27,21 +27,51 @@ def _utcnow() -> dt.datetime:
 
 
 class User(Base):
-    """A friend with access. Registration is gated by the invite code."""
+    """An account. Market access comes from the role or an active subscription."""
 
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(256), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(256), nullable=False)
-    role: Mapped[str] = mapped_column(String(16), default="member")  # admin | member
+    # admin = full access + admin panel; staff = full access, no panel, never pays;
+    # member = pays (or is granted a plan by an admin).
+    role: Mapped[str] = mapped_column(String(16), default="member")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # suspended = can't log in
+    # --- subscription (see app/plans.py) ---
+    plan: Mapped[str | None] = mapped_column(String(16))            # egx | us | both | None
+    plan_until: Mapped[dt.datetime | None] = mapped_column(DateTime)  # None/past = expired
+    plan_source: Mapped[str | None] = mapped_column(String(16))     # paypal | manual
+    paypal_subscription_id: Mapped[str | None] = mapped_column(String(64), index=True)
     last_login_at: Mapped[dt.datetime | None] = mapped_column(DateTime)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
     watchlist: Mapped[list["WatchlistItem"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+
+
+class SubscriptionEvent(Base):
+    """Audit trail of every subscription change — payments, admin grants, expiries.
+
+    Kept separate from `users` so the current entitlement stays a cheap column read
+    while the history (who granted what, which PayPal payment) is fully traceable.
+    """
+
+    __tablename__ = "subscription_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(32))     # activate|renew|cancel|expire|grant
+    plan: Mapped[str | None] = mapped_column(String(16))
+    period: Mapped[str | None] = mapped_column(String(16))   # monthly | annual
+    amount: Mapped[float | None] = mapped_column(Float)
+    currency: Mapped[str | None] = mapped_column(String(8))
+    source: Mapped[str | None] = mapped_column(String(16))   # paypal | manual
+    reference: Mapped[str | None] = mapped_column(String(128))  # PayPal id / admin email
+    until: Mapped[dt.datetime | None] = mapped_column(DateTime)
+    note: Mapped[str | None] = mapped_column(String(256))
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class WatchlistItem(Base):

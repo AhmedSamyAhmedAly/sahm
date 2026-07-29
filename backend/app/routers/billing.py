@@ -1,0 +1,170 @@
+"""Billing: plan catalogue, activation after PayPal checkout, and the webhook."""
+from __future__ import annotations
+
+import datetime as dt
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app import paypal, plans
+from app.config import settings
+from app.database import get_db
+from app.deps import get_current_user
+from app.models import SubscriptionEvent, User
+from app.schemas import ActivateSubscriptionRequest, SubscriptionOut
+
+log = logging.getLogger("saeed.billing")
+router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+
+def _record(db: Session, user: User, action: str, *, plan=None, period=None,
+            amount=None, source=None, reference=None, note=None) -> None:
+    db.add(SubscriptionEvent(
+        user_id=user.id, action=action, plan=plan, period=period, amount=amount,
+        currency="USD" if amount else None, source=source, reference=reference,
+        until=user.plan_until, note=note,
+    ))
+
+
+def subscription_out(user: User) -> SubscriptionOut:
+    return SubscriptionOut(
+        plan=user.plan,
+        plan_until=user.plan_until,
+        plan_source=user.plan_source,
+        active=plans.subscription_active(user),
+        markets=plans.allowed_markets(user),
+        role=user.role,
+        needs_payment=(user.role not in plans.FREE_ROLES and not plans.subscription_active(user)),
+    )
+
+
+@router.get("/plans")
+def list_plans():
+    """Public pricing + the PayPal plan ids the checkout button needs."""
+    return {
+        "plans": plans.public_plans(),
+        "paypal_client_id": settings.paypal_client_id,   # public by design
+        "paypal_configured": settings.paypal_configured,
+        "currency": "USD",
+    }
+
+
+@router.get("/me", response_model=SubscriptionOut)
+def my_subscription(user: User = Depends(get_current_user)):
+    return subscription_out(user)
+
+
+@router.post("/activate", response_model=SubscriptionOut)
+def activate(req: ActivateSubscriptionRequest,
+             db: Session = Depends(get_db),
+             user: User = Depends(get_current_user)):
+    """Called by the SPA after PayPal approval.
+
+    The subscription id is VERIFIED against PayPal — we never trust the plan or
+    price the browser claims. The plan is derived from PayPal's own plan id.
+    """
+    try:
+        sub = paypal.get_subscription(req.subscription_id.strip())
+    except paypal.PayPalError as e:
+        log.warning("paypal lookup failed: %s", e)
+        raise HTTPException(status_code=502, detail="Could not verify the subscription with PayPal")
+
+    status = (sub.get("status") or "").upper()
+    if status not in ("ACTIVE", "APPROVED"):
+        raise HTTPException(status_code=400, detail=f"Subscription is {status.title() or 'not active'}")
+
+    mapped = paypal.plan_period_for(sub.get("plan_id", ""))
+    if not mapped:
+        raise HTTPException(status_code=400, detail="Unknown PayPal plan — contact support")
+    plan, period = mapped
+
+    # Guard against one PayPal subscription being claimed by two accounts.
+    taken = db.execute(
+        select(User).where(User.paypal_subscription_id == sub.get("id"), User.id != user.id)
+    ).scalar_one_or_none()
+    if taken:
+        raise HTTPException(status_code=409, detail="That subscription is already linked to another account")
+
+    user.plan = plan
+    user.plan_until = plans.extend(user.plan_until, period)
+    user.plan_source = "paypal"
+    user.paypal_subscription_id = sub.get("id")
+    _record(db, user, "activate", plan=plan, period=period,
+            amount=plans.price_of(plan, period), source="paypal", reference=sub.get("id"))
+    db.commit()
+    db.refresh(user)
+    return subscription_out(user)
+
+
+@router.post("/cancel", response_model=SubscriptionOut)
+def cancel(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Stop future billing. Access remains until the paid term ends."""
+    if user.paypal_subscription_id:
+        try:
+            paypal.cancel_subscription(user.paypal_subscription_id)
+        except paypal.PayPalError as e:
+            log.warning("paypal cancel failed: %s", e)
+            raise HTTPException(status_code=502, detail="Could not cancel with PayPal — try again")
+    user.plan_source = "cancelled"
+    _record(db, user, "cancel", plan=user.plan, source="paypal",
+            reference=user.paypal_subscription_id,
+            note="access retained until plan_until")
+    db.commit()
+    db.refresh(user)
+    return subscription_out(user)
+
+
+@router.post("/webhook")
+async def webhook(request: Request, db: Session = Depends(get_db)):
+    """PayPal renewals / cancellations / failures.
+
+    Unverified events are ignored — anyone can POST here, so the signature check is
+    the only thing standing between a stranger and a free subscription.
+    """
+    body = await request.body()
+    if not paypal.verify_webhook(request.headers, body):
+        log.warning("rejected unverified PayPal webhook")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    event = await request.json()
+    etype = (event.get("event_type") or "").upper()
+    res = event.get("resource") or {}
+    sub_id = res.get("id") or (res.get("billing_agreement_id") if "billing_agreement_id" in res else None)
+    if not sub_id:
+        return {"ok": True, "ignored": "no subscription id"}
+
+    user = db.execute(
+        select(User).where(User.paypal_subscription_id == sub_id)
+    ).scalar_one_or_none()
+    if not user:
+        return {"ok": True, "ignored": "unknown subscription"}
+
+    if etype in ("PAYMENT.SALE.COMPLETED", "BILLING.SUBSCRIPTION.ACTIVATED",
+                 "BILLING.SUBSCRIPTION.RE-ACTIVATED"):
+        mapped = paypal.plan_period_for(res.get("plan_id", "")) or (user.plan, "monthly")
+        plan, period = mapped
+        user.plan = plan or user.plan
+        user.plan_until = plans.extend(user.plan_until, period)
+        user.plan_source = "paypal"
+        _record(db, user, "renew", plan=user.plan, period=period, source="paypal",
+                reference=sub_id, note=etype)
+    elif etype in ("BILLING.SUBSCRIPTION.CANCELLED", "BILLING.SUBSCRIPTION.EXPIRED",
+                   "BILLING.SUBSCRIPTION.SUSPENDED"):
+        # Keep access until the paid term ends; just stop auto-renewal.
+        user.plan_source = "cancelled"
+        _record(db, user, "cancel", plan=user.plan, source="paypal",
+                reference=sub_id, note=etype)
+    elif etype == "PAYMENT.SALE.DENIED":
+        _record(db, user, "payment_failed", plan=user.plan, source="paypal",
+                reference=sub_id, note=etype)
+    else:
+        return {"ok": True, "ignored": etype}
+
+    db.commit()
+    return {"ok": True, "handled": etype}
+
+
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)

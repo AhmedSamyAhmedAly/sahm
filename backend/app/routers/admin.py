@@ -15,9 +15,11 @@ from app.auth import hash_password, role_for_email
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
-from app.models import Asset, DailyBar, Recommendation, User
+from app.models import Asset, DailyBar, Recommendation, SubscriptionEvent, User
+from app import plans
 from app.schemas import (
-    AdminStats, AdminUserOut, CreateUserRequest, UpdateUserRequest,
+    AdminStats, AdminUserOut, CreateUserRequest, GrantSubscriptionRequest,
+    UpdateUserRequest,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -32,7 +34,54 @@ def _to_out(u: User) -> AdminUserOut:
         id=u.id, email=u.email, role=u.role, is_active=u.is_active,
         is_primary=_is_the_admin(u.email),
         created_at=u.created_at, last_login_at=u.last_login_at,
+        plan=u.plan, plan_until=u.plan_until, plan_source=u.plan_source,
+        subscription_active=plans.subscription_active(u),
+        markets=plans.allowed_markets(u),
     )
+
+
+@router.post("/users/{user_id}/subscription", response_model=AdminUserOut)
+def set_subscription(
+    user_id: int,
+    req: GrantSubscriptionRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Grant, extend or revoke a plan by hand — comps, refunds, friends, testing.
+
+    `plan=None` revokes. Otherwise pass either `until` (exact expiry) or `days`
+    (extends from the later of now / current expiry, so nobody loses paid time).
+    """
+    u = db.get(User, user_id)
+    if u is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if req.plan is None:
+        u.plan, u.plan_until, u.plan_source = None, None, None
+        action = "revoke"
+    else:
+        plan = req.plan.strip().lower()
+        if plan not in plans.PLANS:
+            raise HTTPException(status_code=400,
+                                detail=f"Unknown plan — use one of: {', '.join(plans.PLANS)}")
+        if req.until is not None:
+            until = req.until
+        else:
+            days = req.days if (req.days and req.days > 0) else 30
+            base = plans._aware(u.plan_until)
+            now = dt.datetime.now(dt.timezone.utc)
+            until = (base if base and base > now else now) + dt.timedelta(days=days)
+        u.plan, u.plan_until, u.plan_source = plan, until, "manual"
+        action = "grant"
+
+    db.add(SubscriptionEvent(
+        user_id=u.id, action=action, plan=u.plan, source="manual",
+        reference=admin.email, until=u.plan_until,
+        note=(req.note or "")[:255] or None,
+    ))
+    db.commit()
+    db.refresh(u)
+    return _to_out(u)
 
 
 @router.get("/users", response_model=list[AdminUserOut])
@@ -68,8 +117,9 @@ def update_user(user_id: int, req: UpdateUserRequest, db: Session = Depends(get_
     is_primary = _is_the_admin(user.email)
 
     if req.role is not None:
-        if req.role not in ("admin", "member"):
-            raise HTTPException(status_code=400, detail="Role must be admin or member")
+        # staff = full market access without paying, but no admin panel.
+        if req.role not in ("admin", "staff", "member"):
+            raise HTTPException(status_code=400, detail="Role must be admin, staff or member")
         if req.role != "admin" and is_primary:
             raise HTTPException(status_code=400, detail="Cannot demote the primary admin")
         if req.role != "admin" and is_self:

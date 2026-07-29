@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import create_token, hash_password, role_for_email, verify_password
 from app.config import settings
+from app import plans
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
@@ -23,6 +24,10 @@ def _token_response(user: User) -> TokenResponse:
     return TokenResponse(
         access_token=create_token(user.id, user.email, user.role),
         email=user.email, role=user.role,
+        plan=user.plan, plan_until=user.plan_until,
+        markets=plans.allowed_markets(user),
+        needs_payment=(user.role not in plans.FREE_ROLES
+                       and not plans.subscription_active(user)),
     )
 
 
@@ -39,6 +44,13 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     # Role is pinned by email — only the configured admin email is ever admin.
     user = User(email=email, hashed_password=hash_password(req.password),
                 role=role_for_email(email), is_active=True, last_login_at=_utcnow())
+    # Optional free trial so new accounts can look around before paying. The plan
+    # they picked on the form is only an INTENT — real access needs payment.
+    if settings.trial_days > 0 and user.role not in plans.FREE_ROLES:
+        wanted = (req.plan or "both").strip().lower()
+        user.plan = wanted if wanted in plans.PLANS else "both"
+        user.plan_until = _utcnow() + dt.timedelta(days=settings.trial_days)
+        user.plan_source = "trial"
     db.add(user)
     db.commit()
     db.refresh(user)

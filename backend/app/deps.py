@@ -44,3 +44,22 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
     return user
+
+
+# HTTP 402 = "Payment Required": the SPA uses this exact status to show the
+# subscribe page instead of a generic error.
+PAYWALL = 402
+
+
+def require_market_access(user: User, market: str | None) -> None:
+    """Guard market data behind the subscription. Admin/staff always pass."""
+    from app.plans import allowed_markets, can_access  # local: avoids an import cycle
+
+    if can_access(user, market):
+        return
+    allowed = allowed_markets(user)
+    detail = (
+        f"Your plan doesn't include {market}." if (market and allowed)
+        else "A subscription is required to view market data."
+    )
+    raise HTTPException(status_code=PAYWALL, detail=detail)

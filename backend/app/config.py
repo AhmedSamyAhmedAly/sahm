@@ -153,8 +153,42 @@ class Settings(BaseSettings):
     open_registration: bool = False
 
     # --- access ---
-    # The ONE admin. This email is always admin; everyone else is always member.
+    # The ONE bootstrap admin. This email is always admin; other roles are stored
+    # per user (admin | staff | member) and managed from the admin panel.
     admin_email: str = "ahmed.samy@sahm.app"
+    # Grace period for brand-new accounts so people can look around before paying.
+    # 0 disables the trial entirely.
+    trial_days: int = 0
+
+    # --- billing (PayPal Subscriptions) ---
+    # "sandbox" while testing, "live" for real money.
+    paypal_env: str = "sandbox"
+    paypal_client_id: str = ""
+    paypal_client_secret: str = ""
+    paypal_webhook_id: str = ""     # from the PayPal webhook you create
+    # Billing-plan ids created once in the PayPal dashboard (see docs/MONETIZATION.md)
+    paypal_plan_egx_monthly: str = ""
+    paypal_plan_egx_annual: str = ""
+    paypal_plan_us_monthly: str = ""
+    paypal_plan_us_annual: str = ""
+    paypal_plan_both_monthly: str = ""
+    paypal_plan_both_annual: str = ""
+
+    # --- ads ---
+    # Pasted from your ad network (AdSense/Ezoic/...). The <script> tag goes in
+    # ads_head_snippet; each slot renders ads_slot_html with {slot} substituted.
+    ads_enabled: bool = False
+    ads_head_snippet: str = ""
+    ads_slot_html: str = ""
+
+    @property
+    def paypal_api_base(self) -> str:
+        return ("https://api-m.paypal.com" if self.paypal_env.strip().lower() == "live"
+                else "https://api-m.sandbox.paypal.com")
+
+    @property
+    def paypal_configured(self) -> bool:
+        return bool(self.paypal_client_id and self.paypal_client_secret)
 
     # --- web ---
     cors_origins: str = "http://localhost:5173"
