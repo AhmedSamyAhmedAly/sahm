@@ -12,7 +12,9 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import User
-from app.schemas import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas import (
+    ChangePasswordRequest, LoginRequest, RegisterRequest, TokenResponse,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -57,6 +59,26 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         user.role = "admin"
     user.last_login_at = _utcnow()
     db.commit()
+    return _token_response(user)
+
+
+@router.post("/change-password", response_model=TokenResponse)
+def change_password(
+    req: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Change your own password. Requires the current one, so a stolen (but still
+    valid) token can't lock you out of your own account."""
+    if not verify_password(req.current_password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Current password is wrong")
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    if req.new_password == req.current_password:
+        raise HTTPException(status_code=400, detail="New password must be different")
+    user.hashed_password = hash_password(req.new_password)
+    db.commit()
+    # Hand back a fresh token so the current session stays signed in.
     return _token_response(user)
 
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth.jsx";
+import ChangePassword from "./ChangePassword.jsx";
 
 function Avatar({ u, size = 34 }) {
   const style = {
@@ -14,6 +15,7 @@ function Avatar({ u, size = 34 }) {
 export default function ProfileMenu() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -42,9 +44,13 @@ export default function ProfileMenu() {
               </div>
             </div>
           </div>
+          <button className="dropdown-item" onClick={() => { setOpen(false); setPwOpen(true); }}>
+            🔑 Change password
+          </button>
           <button className="dropdown-item danger" onClick={logout}>↩ Logout</button>
         </div>
       )}
+      {pwOpen && <ChangePassword onClose={() => setPwOpen(false)} />}
     </div>
   );
 }

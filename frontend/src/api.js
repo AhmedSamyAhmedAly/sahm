@@ -39,6 +39,8 @@ export const api = {
   login: (email, password) =>
     request("/api/auth/login", { method: "POST", auth: false, body: { email, password } }),
   me: () => request("/api/auth/me"),
+  changePassword: (current_password, new_password) =>
+    request("/api/auth/change-password", { method: "POST", body: { current_password, new_password } }),
   picks: (params = {}) => {
     const q = new URLSearchParams(params).toString();
     return request(`/api/picks${q ? `?${q}` : ""}`);

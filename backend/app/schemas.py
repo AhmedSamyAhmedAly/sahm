@@ -18,6 +18,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 # ---- admin ----
 class AdminUserOut(BaseModel):
     id: int

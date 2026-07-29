@@ -314,6 +314,21 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .pill.liq-ok { background: var(--card-2); color: var(--muted); }
 .pill.liq-thin { background: rgba(255,107,107,0.14); color: var(--red); cursor: help; }
 
+/* ---------- modal (change password) ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 60;
+  display: grid; place-items: center; padding: 16px;
+}
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px; width: 100%; max-width: 380px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+}
+.modal-form { display: flex; flex-direction: column; gap: 10px; }
+.modal-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.modal-form input { width: 100%; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
 /* ---------- positions add form ---------- */
 .pos-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .pos-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
