@@ -43,9 +43,10 @@ export default function TradePlan({ pick, ticker }) {
   const cur = currencyForTicker(ticker);
   const [rates, setRates] = useState({});
   useEffect(() => { api.trackRecord().then((t) => setRates(baseRateMap(t))).catch(() => {}); }, []);
-  // "I bought this": choose plan entry or a custom fill price, then add.
+  // "I bought this": choose plan entry or a custom fill price (+ optional shares), then add.
   const [mode, setMode] = useState("idle"); // idle | choose | custom
   const [buyPrice, setBuyPrice] = useState("");
+  const [buyShares, setBuyShares] = useState("");
 
   const entry = pick?.entry_price ?? null;
   const target = pick?.target_price ?? null;
@@ -66,10 +67,11 @@ export default function TradePlan({ pick, ticker }) {
   const size = positionSize({ capital, riskPct, entry, stop });
   const gainPerShare = target != null ? target - entry : null;
 
-  // Add the position at the given fill price (shares from the sizer if set).
+  // Add the position at the given fill price. Shares: what you typed, else the
+  // sizer's suggestion.
   const track = (price) => {
     add({
-      ticker, shares: size?.shares || 0, buyPrice: price, stop, target,
+      ticker, shares: Number(buyShares) || size?.shares || 0, buyPrice: price, stop, target,
       horizon: pick.horizon_days || null, date: new Date().toISOString().slice(0, 10),
     });
     nav("/positions");
@@ -172,6 +174,11 @@ export default function TradePlan({ pick, ticker }) {
         <div className="buy-confirm">
           <span className="plan-label">At what price did you buy?</span>
           <div className="buy-confirm-row">
+            <label>Shares (optional)
+              <input type="number" min="0" value={buyShares}
+                placeholder={size?.shares ? `${size.shares} (suggested)` : ""}
+                onChange={(e) => setBuyShares(e.target.value)} />
+            </label>
             <button type="button" className="primary" onClick={() => track(entry)}>
               At plan entry — {fmt(entry, cur)}
             </button>
@@ -190,6 +197,11 @@ export default function TradePlan({ pick, ticker }) {
             <label>Price ({cur})
               <input type="number" min="0" step="any" autoFocus value={buyPrice}
                 onChange={(e) => setBuyPrice(e.target.value)} />
+            </label>
+            <label>Shares (optional)
+              <input type="number" min="0" value={buyShares}
+                placeholder={size?.shares ? `${size.shares} (suggested)` : ""}
+                onChange={(e) => setBuyShares(e.target.value)} />
             </label>
             <button type="button" className="primary" disabled={!Number(buyPrice)}
               onClick={() => track(Number(buyPrice))}>
