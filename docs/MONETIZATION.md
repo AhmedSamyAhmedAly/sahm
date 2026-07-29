@@ -38,13 +38,28 @@ PayPal needs a *Product*, then one *Plan* per (package × period) — six in tot
 It reads the prices from `app/plans.py`, creates everything, and prints the exact
 variables to paste into Railway — no forms, no mistyped ids.
 
-```bash
-cd backend
-PAYPAL_ENV=sandbox \
-PAYPAL_CLIENT_ID=<your sandbox client id> \
-PAYPAL_CLIENT_SECRET=<your sandbox secret> \
-    python scripts/paypal_setup_plans.py
+Put the credentials in `backend/.env` (it's git-ignored) —
+
 ```
+PAYPAL_ENV=sandbox
+PAYPAL_CLIENT_ID=your-sandbox-client-id
+PAYPAL_CLIENT_SECRET=your-sandbox-secret
+```
+
+— then run it. **PowerShell (Windows):**
+```powershell
+cd C:\Users\knagd\OneDrive\Desktop\sahm-main\backend
+python scripts/paypal_setup_plans.py
+```
+
+**macOS / Linux:**
+```bash
+cd backend && python scripts/paypal_setup_plans.py
+```
+
+> The script reads `.env`, so you don't need to set environment variables inline.
+> If you'd rather pass them per-run: PowerShell uses `$env:NAME = "value"` on its own
+> line — the Bash form `NAME=value command` does **not** work in PowerShell.
 
 It creates:
 
