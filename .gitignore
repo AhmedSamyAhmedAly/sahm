@@ -30,3 +30,4 @@ backend/*.log
 # local credential scratch file
 backend/ADMIN_LOGIN.txt
 backend/run_migrate.sh
+backend/paypal_plan_ids.json

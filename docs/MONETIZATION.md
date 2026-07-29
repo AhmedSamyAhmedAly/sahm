@@ -29,12 +29,24 @@ plan amounts are immutable once created.)
 > Do all of Steps A–D in **Sandbox** first. When it works end to end, repeat in
 > **Live** and swap the four values.
 
-## Step B — create the six billing plans
+## Step B — create the product + six billing plans
 
-PayPal needs a *Product* and then one *Plan* per (package × period).
+PayPal needs a *Product*, then one *Plan* per (package × period) — six in total.
 
-**Easiest route — the dashboard:** **Pay & Get Paid → Subscriptions → Create plan**.
-Create a product `Saeed signals`, then six plans:
+### ✅ Recommended: run the script (one command)
+
+It reads the prices from `app/plans.py`, creates everything, and prints the exact
+variables to paste into Railway — no forms, no mistyped ids.
+
+```bash
+cd backend
+PAYPAL_ENV=sandbox \
+PAYPAL_CLIENT_ID=<your sandbox client id> \
+PAYPAL_CLIENT_SECRET=<your sandbox secret> \
+    python scripts/paypal_setup_plans.py
+```
+
+It creates:
 
 | Plan name | Price | Cycle |
 |---|---|---|
@@ -42,10 +54,21 @@ Create a product `Saeed signals`, then six plans:
 | Saeed EGX Annual | $40 | every 1 year |
 | Saeed US Monthly | $7 | every 1 month |
 | Saeed US Annual | $60 | every 1 year |
-| Saeed Both Monthly | $10 | every 1 month |
-| Saeed Both Annual | $90 | every 1 year |
+| Saeed EGX + US Monthly | $10 | every 1 month |
+| Saeed EGX + US Annual | $90 | every 1 year |
 
-Copy each **plan id** (looks like `P-5ML4271244454362XMQIZHI`).
+Then repeat with your **live** credentials and `PAYPAL_ENV=live` (it asks for
+confirmation first, since those plans take real money).
+
+Safe to re-run — it reuses a product/plan of the same name rather than duplicating.
+Ids are also saved to `backend/paypal_plan_ids.json`.
+
+### Or by hand
+**Pay & Get Paid → Subscriptions → Create plan**: make a product `Saeed signals`,
+then the six plans above, and copy each **plan id** (`P-5ML4271244454362XMQIZHI`).
+
+> ⚠️ PayPal plan prices are **immutable**. To change a price, edit `app/plans.py`,
+> re-run the script to create new plans, and point the env vars at the new ids.
 
 ## Step C — set the backend variables
 

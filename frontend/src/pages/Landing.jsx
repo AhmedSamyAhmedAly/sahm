@@ -111,7 +111,7 @@ export default function Landing() {
         Educational / research tool — <b>not financial advice</b>. Signals are algorithmic
         estimates that can be wrong; about half of even our best calls miss, which is why
         stops and position sizing matter. Past performance doesn't guarantee future results,
-        and you can lose money. You review and place every trade yourself.
+        and you can lose money. You review and place every trade yourself. See our <Link to="/legal">Terms &amp; Privacy</Link>.
       </p>
     </div>
   );

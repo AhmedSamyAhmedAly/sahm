@@ -11,6 +11,7 @@ import Subscribe from "./pages/Subscribe.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import Landing from "./pages/Landing.jsx";
+import Legal from "./pages/Legal.jsx";
 import Logo from "./components/Logo.jsx";
 
 function AdminDropdown() {
@@ -141,6 +142,7 @@ export default function App() {
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
         {/* Admin-only: the raw model metrics are internal. The pill colours still
             work for everyone — they read the same endpoint directly. */}
+        <Route path="/legal" element={<Legal />} />
         <Route path="/track-record" element={<Protected adminOnly><TrackRecord /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -154,6 +156,7 @@ function Footer() {
     <div className="footer">
       <span>Saeed · educational tool, not financial advice</span>
       <span className="spacer" />
+      <NavLink to="/legal" className="link">Terms &amp; Privacy</NavLink>
     </div>
   );
 }
