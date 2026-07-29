@@ -14,7 +14,7 @@ from app.database import ensure_schema, get_db
 from app.models import Asset, DailyBar, PipelineRun, Recommendation, User
 from app.routers import admin, auth, picks, stocks, track_record
 
-log = logging.getLogger("sahm")
+log = logging.getLogger("saeed")
 
 
 def _sync_schema_safely() -> None:
@@ -53,7 +53,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "sahm"}
+    return {"status": "ok", "service": "saeed"}
 
 
 @app.get("/api/status")

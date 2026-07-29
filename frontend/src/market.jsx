@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { MARKET_KEY } from "./storage.js";
 
 // The markets the app can switch between. `code` matches the `exchange` column
 // in the backend (assets.exchange) and the ticker suffix (COMI.EGX, AAPL.US).
@@ -20,7 +21,7 @@ export function currencyForTicker(ticker) {
 }
 
 const MarketCtx = createContext(null);
-const STORAGE_KEY = "sahm_market";
+const STORAGE_KEY = MARKET_KEY;
 
 export function MarketProvider({ children }) {
   const [market, setMarketState] = useState(() => {

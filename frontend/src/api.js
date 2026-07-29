@@ -1,12 +1,14 @@
 // Tiny API client. Token is kept in localStorage and attached as Bearer.
+import { TOKEN_KEY } from "./storage.js";
+
 const BASE = import.meta.env.VITE_API_URL || "";
 
 export function getToken() {
-  return localStorage.getItem("sahm_token");
+  return localStorage.getItem(TOKEN_KEY);
 }
 export function setToken(t) {
-  if (t) localStorage.setItem("sahm_token", t);
-  else localStorage.removeItem("sahm_token");
+  if (t) localStorage.setItem(TOKEN_KEY, t);
+  else localStorage.removeItem(TOKEN_KEY);
 }
 
 async function request(path, { method = "GET", body, auth = true } = {}) {

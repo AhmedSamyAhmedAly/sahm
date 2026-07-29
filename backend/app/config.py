@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     anthropic_api_token: str = ""
     database_url: str = "sqlite:///./sahm.db"
     jwt_secret: str = "change-me"
-    invite_code: str = "sahm-invite"
+    invite_code: str = "saeed-invite"
     # Set OPEN_REGISTRATION=true to let anyone sign up (public growth); otherwise
     # registration stays gated by the shared invite_code.
     open_registration: bool = False

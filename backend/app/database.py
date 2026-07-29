@@ -9,7 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
 
-log = logging.getLogger("sahm.db")
+log = logging.getLogger("saeed.db")
 
 
 class Base(DeclarativeBase):

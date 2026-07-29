@@ -2,9 +2,10 @@
 // can watch them and tell you when to act (target hit / stop hit / time's up).
 // Selling well is half of trading (Point 5); this is the "exit coach".
 import { useEffect, useState } from "react";
+import { POSITIONS_KEY } from "./storage.js";
 
-const KEY = "sahm_positions";
-const EVT = "sahm-positions";
+const KEY = POSITIONS_KEY;
+const EVT = "saeed-positions";
 
 export function getPositions() {
   try {

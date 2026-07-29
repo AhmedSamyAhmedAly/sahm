@@ -3,12 +3,12 @@
 // app, but a refresh or closing the tab clears them (nothing is stored).
 import { useEffect, useState } from "react";
 
-const EVT = "sahm-trade-settings";
+const EVT = "saeed-trade-settings";
 let _capital = 0;
 let _riskPct = 1; // default: risk 1% of capital per trade
 
 // Clean up values saved by the old persisted version.
-try { localStorage.removeItem("sahm_capital"); localStorage.removeItem("sahm_risk_pct"); } catch { /* ignore */ }
+try { localStorage.removeItem("sahm_capital"); localStorage.removeItem("sahm_risk_pct"); localStorage.removeItem("saeed_capital"); localStorage.removeItem("saeed_risk_pct"); } catch { /* ignore */ }
 
 export const getCapital = () => _capital;
 export const getRiskPct = () => _riskPct;
