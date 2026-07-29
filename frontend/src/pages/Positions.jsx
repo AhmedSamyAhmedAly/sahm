@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { money, signed } from "../format.js";
 import { useMarket, currencyForTicker } from "../market.jsx";
 import { usePositions, positionStatus } from "../positions.js";
+import TickerPicker from "../components/TickerPicker.jsx";
 
 function fmt(x, cur) {
   if (x == null) return "—";
@@ -18,12 +19,7 @@ export default function Positions() {
   const { positions, add, remove } = usePositions();
   const [prices, setPrices] = useState({});
   const [form, setForm] = useState(BLANK);
-  const [choices, setChoices] = useState([]);
 
-  // Ticker suggestions for the add-position dropdown (the current market's list).
-  useEffect(() => {
-    api.tickers(market).then(setChoices).catch(() => setChoices([]));
-  }, [market]);
 
   // Pull the latest price for every held ticker (few positions → a few calls).
   const tickers = useMemo(() => [...new Set(positions.map((p) => p.ticker))], [positions]);
@@ -142,14 +138,9 @@ export default function Positions() {
       <div className="card" style={{ padding: 16 }}>
         <div className="section-title" style={{ marginTop: 0 }}>Add a position</div>
         <form onSubmit={submit} className="pos-form">
-          <label>Ticker
-            <input list="ticker-list" placeholder="Search ticker or name" value={form.ticker}
-              onChange={(e) => setForm({ ...form, ticker: e.target.value })} />
-            <datalist id="ticker-list">
-              {choices.map((c) => (
-                <option key={c.ticker} value={c.ticker}>{c.name || c.ticker}</option>
-              ))}
-            </datalist>
+          <label style={{ minWidth: 240 }}>Ticker
+            <TickerPicker value={form.ticker} market={market}
+              onChange={(t) => setForm({ ...form, ticker: t })} />
           </label>
           <label>Shares<input type="number" min="0" value={form.shares}
             onChange={(e) => setForm({ ...form, shares: e.target.value })} /></label>

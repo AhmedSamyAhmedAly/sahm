@@ -335,6 +335,26 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .pos-form input { width: 130px; }
 .pos-form button.primary { height: 38px; }
 
+/* ---------- searchable ticker picker ---------- */
+.tickerpick { position: relative; }
+.tickerpick > input { width: 100%; }
+.tickerpick-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50;
+  max-height: 260px; overflow-y: auto; background: var(--card);
+  border: 1px solid var(--border); border-radius: 10px; padding: 4px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+}
+.tickerpick-item {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  background: transparent; border: none; color: var(--text); cursor: pointer;
+  padding: 7px 9px; border-radius: 7px; font-size: 13px;
+}
+.tickerpick-item.hi, .tickerpick-item:hover { background: var(--card-2); }
+.tickerpick-item small {
+  color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tickerpick-ex { color: var(--muted); font-size: 11px; }
+
 .copybtn {
   align-self: flex-start; margin-top: 2px; background: transparent; border: 1px solid var(--border);
   color: var(--muted); border-radius: 6px; padding: 1px 6px; font-size: 11px; cursor: pointer;

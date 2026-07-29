@@ -58,7 +58,6 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
   const [q, setQ] = useState("");
   const [minConf, setMinConf] = useState(0);
   const [sort, setSort] = useState("rank");
-  const [band, setBand] = useState("auto"); // "auto" or "<pct>_<days>" — the Sell-target view
   const isAll = mode === "all";
 
   useEffect(() => {
@@ -71,28 +70,11 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
   // Base hit-rate ("luck") per band, from the model metrics — for the edge coloring.
   const baseRates = useMemo(() => baseRateMap(track), [track]);
 
-  // The target/time pairs the model actually measured (for the Sell-target selector).
-  const bandOptions = useMemo(() => {
-    const seen = new Map();
-    for (const p of data?.picks || [])
-      for (const b of p.bands || []) {
-        const k = `${b.target_pct}_${b.horizon_days}`;
-        if (!seen.has(k)) seen.set(k, { target_pct: b.target_pct, horizon_days: b.horizon_days });
-      }
-    return [...seen.values()].sort((a, b) => a.target_pct - b.target_pct);
-  }, [data]);
-
-  // The Sell target shown for a pick, honouring the selected band ("auto" = the
-  // engine's headline; otherwise recompute price = entry x (1+target) and use that
-  // band's measured success %).
-  const targetFor = (p) => {
-    if (band === "auto")
-      return { pct: p.target_pct, days: p.horizon_days, price: p.target_price, prob: p.success_prob };
-    const [pct, days] = band.split("_").map(Number);
-    const bd = (p.bands || []).find((b) => b.target_pct === pct && b.horizon_days === days);
-    const price = p.entry_price != null ? p.entry_price * (1 + pct) : null;
-    return { pct, days, price, prob: bd ? bd.prob : null };
-  };
+  // The engine's headline target for a pick (best profit-per-day that clears its
+  // confidence floor). Per-stock alternatives live on the stock detail page.
+  const targetFor = (p) => ({
+    pct: p.target_pct, days: p.horizon_days, price: p.target_price, prob: p.success_prob,
+  });
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -167,16 +149,6 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
           {!isAll && (
-            <select value={band} onChange={(e) => setBand(e.target.value)} title="Which profit target to show as the Sell target">
-              <option value="auto">Sell target: Best (auto)</option>
-              {bandOptions.map((b) => (
-                <option key={`${b.target_pct}_${b.horizon_days}`} value={`${b.target_pct}_${b.horizon_days}`}>
-                  Sell target: +{Math.round(b.target_pct * 100)}% · ~{b.horizon_days}d
-                </option>
-              ))}
-            </select>
-          )}
-          {!isAll && (
             <select value={minConf} onChange={(e) => setMinConf(Number(e.target.value))}>
               <option value={0}>Any confidence</option>
               <option value={0.8}>≥ 80% confident</option>
@@ -192,6 +164,23 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
             </select>
           )}
         </div>
+
+        {!isAll && (
+          <div className="legend">
+            <span className="legend-title">News</span>
+            <span>🟢 positive</span>
+            <span>🔴 negative</span>
+            <span>➖ neutral</span>
+            <span title="A strong, recent event (earnings, a big contract, a deal, a payout…) that can move the price soon.">
+              ⚡ catalyst
+            </span>
+            <span>— not analysed</span>
+            <span className="legend-title" style={{ marginLeft: 10 }}>Trade</span>
+            <span title="Heavily traded — tight spread, easy to buy/sell.">Easy</span>
+            <span title="Reasonably traded — a small spread cost.">OK</span>
+            <span title="Thinly traded — WIDE spread; you can lose 1–2% just entering.">Thin ⚠</span>
+          </div>
+        )}
 
         <div style={{ overflowX: "auto" }}>
           {isAll ? (
