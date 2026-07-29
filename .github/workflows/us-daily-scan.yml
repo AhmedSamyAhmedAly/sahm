@@ -1,17 +1,21 @@
 name: Daily US scan
 
-# Same LIGHT nightly engine as EGX, but for the US market (MARKET=US). It reads the
-# full US history from a SEPARATE Actions cache (sahm-us.db) for free and writes only
-# the tiny incremental serving slice (today's US picks + bars) to the SAME Neon DB —
-# EGX and US never collide because every row is namespaced by exchange.
+# Daily US signals, run DIRECTLY against the serving database.
 #
-# US cash session opens 09:30 America/New_York. We scan pre-open (US EOD data for the
-# prior session is available overnight), Mon-Fri. Times are UTC and span both EST/EDT.
+# Why no local cache: the US universe's full 16-year history is ~4.7 GB, which does
+# not fit a free CI runner. But the daily job doesn't need it — the scan reads only
+# the last ~400 bars per ticker (indicators need 210) and the serving DB keeps ~1
+# year. Full history is only required by the weekly RETRAIN, which is run manually
+# on a real machine (see docs/US_MARKET.md).
+#
+# The US cash session opens 09:30 America/New_York. These UTC times stay pre-open in
+# both EST (UTC-5) and EDT (UTC-4), and the prior session's EOD data is published
+# overnight, so the scan always has fresh closes to work with. Mon-Fri.
 on:
   schedule:
-    - cron: "47 8 * * 1-5"    # ~03:47/04:47 ET — well before the 09:30 open
-    - cron: "47 12 * * 1-5"   # backup, still pre-open
-  workflow_dispatch: {}       # manual runs (also used to first bootstrap US)
+    - cron: "40 8 * * 1-5"    # 03:40 EST / 04:40 EDT — well before the open
+    - cron: "40 12 * * 1-5"   # backup, still pre-open (07:40 EST / 08:40 EDT)
+  workflow_dispatch: {}
 
 concurrency:
   group: us-daily-scan
@@ -20,11 +24,10 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    permissions:
-      actions: write          # manage the US history cache
-      contents: read
+    timeout-minutes: 120
     env:
-      MARKET: US              # <- selects the US MarketProfile for the whole job
+      MARKET: US
+      TZ: UTC
     defaults:
       run:
         working-directory: backend
@@ -35,42 +38,22 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-engine.txt
 
-      # Restore the rolling US history file (separate key from EGX's sahm-db-*).
-      - name: Restore US history cache
-        uses: actions/cache/restore@v4
-        with:
-          path: backend/sahm-us.db
-          key: sahm-us-db-${{ github.run_id }}
-          restore-keys: sahm-us-db-
-
-      - name: Engine on local US file (no Neon reads)
-        id: engine
+      # Top up yesterday's bars, grade matured calls, then publish today's picks.
+      # Writes land straight in the serving DB — no separate push step.
+      - name: Ingest top-up + grade + scan (US)
         env:
-          DATABASE_URL: "sqlite:///./sahm-us.db"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           EODHD_API_TOKEN: ${{ secrets.EODHD_API_TOKEN }}
           OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
           ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
-        run: |
-          if [ -f sahm-us.db ]; then
-            python -m app.cli daily
-          else
-            # The full US bootstrap is too heavy for one job — do it via the dedicated
-            # "US bootstrap (chunked ingest)" workflow. Skip cleanly until it exists.
-            echo "No US history cache yet — run the 'US bootstrap (chunked ingest)' "\
-                 "workflow first. Skipping this daily run."
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-          fi
+        run: python -m app.cli daily
 
-      - name: Push US picks + today's bars to Neon (tiny)
-        if: steps.engine.outputs.skipped != 'true'
+      # Keep the serving DB lean: drop chart history older than the window the UI
+      # can display, so daily appends don't grow it without bound.
+      - name: Trim old chart history
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          LOCAL_DB_URL: "sqlite:///./sahm-us.db"
-        run: python scripts/push_serving.py
-
-      - name: Save US history cache
-        if: steps.engine.outputs.skipped != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: backend/sahm-us.db
-          key: sahm-us-db-${{ github.run_id }}
+          MARKET: US
+          ACTIVE_DAYS: "380"
+          INACTIVE_DAYS: "380"
+        run: python scripts/trim_bars.py
