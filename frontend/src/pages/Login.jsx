@@ -18,6 +18,8 @@ export default function Login() {
   const [period, setPeriod] = useState("monthly");
   const [cat, setCat] = useState(null);
   useEffect(() => { api.plans().then(setCat).catch(() => {}); }, []);
+  // When signup is public there is no invite code to ask for.
+  const openReg = cat?.open_registration !== false;
 
   if (user) {
     nav("/", { replace: true });
@@ -30,7 +32,7 @@ export default function Login() {
     setBusy(true);
     try {
       if (mode === "login") await login(email, password);
-      else await register(email, password, invite, plan, period);
+      else await register(email, password, openReg ? "" : invite, plan, period);
       nav("/", { replace: true });
     } catch (e2) {
       setErr(e2.message || "Something went wrong");
@@ -64,10 +66,12 @@ export default function Login() {
           </div>
           {mode === "register" && (
             <>
-              <div className="field">
-                <label>Invite code</label>
-                <input value={invite} required onChange={(e) => setInvite(e.target.value)} />
-              </div>
+              {!openReg && (
+                <div className="field">
+                  <label>Invite code</label>
+                  <input value={invite} required onChange={(e) => setInvite(e.target.value)} />
+                </div>
+              )}
               <div className="field">
                 <label>Choose your plan</label>
                 <div className="plan-mini">
@@ -103,7 +107,7 @@ export default function Login() {
           {mode === "login" ? (
             <>
               No account?{" "}
-              <a onClick={() => { setMode("register"); setErr(""); }}>Register with invite</a>
+              <a onClick={() => { setMode("register"); setErr(""); }}>Create an account</a>
             </>
           ) : (
             <>

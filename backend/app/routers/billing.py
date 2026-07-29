@@ -48,6 +48,8 @@ def list_plans():
         "paypal_client_id": settings.paypal_client_id,   # public by design
         "paypal_configured": settings.paypal_configured,
         "currency": "USD",
+        # Lets the register form drop the invite field when signup is public.
+        "open_registration": settings.open_registration,
     }
 
 
