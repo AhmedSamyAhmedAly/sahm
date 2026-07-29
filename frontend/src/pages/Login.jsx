@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import Logo from "../components/Logo.jsx";
 
@@ -12,6 +13,11 @@ export default function Login() {
   const [invite, setInvite] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // Plan chosen at signup — carried to the subscribe step after the account exists.
+  const [plan, setPlan] = useState("both");
+  const [period, setPeriod] = useState("monthly");
+  const [cat, setCat] = useState(null);
+  useEffect(() => { api.plans().then(setCat).catch(() => {}); }, []);
 
   if (user) {
     nav("/", { replace: true });
@@ -24,7 +30,7 @@ export default function Login() {
     setBusy(true);
     try {
       if (mode === "login") await login(email, password);
-      else await register(email, password, invite);
+      else await register(email, password, invite, plan, period);
       nav("/", { replace: true });
     } catch (e2) {
       setErr(e2.message || "Something went wrong");
@@ -37,7 +43,7 @@ export default function Login() {
     <div className="auth-wrap">
       <div className="auth-card">
         <h1><Logo /></h1>
-        <p className="sub">EGX signals with honest, backtested success rates.</p>
+        <p className="sub">EGX &amp; US signals with honest, backtested success rates.</p>
 
         {err && <div className="error">{err}</div>}
 
@@ -57,10 +63,36 @@ export default function Login() {
             />
           </div>
           {mode === "register" && (
-            <div className="field">
-              <label>Invite code</label>
-              <input value={invite} required onChange={(e) => setInvite(e.target.value)} />
-            </div>
+            <>
+              <div className="field">
+                <label>Invite code</label>
+                <input value={invite} required onChange={(e) => setInvite(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Choose your plan</label>
+                <div className="plan-mini">
+                  {(cat?.plans || []).map((p) => (
+                    <button key={p.code} type="button"
+                      className={"plan-mini-item" + (plan === p.code ? " active" : "")}
+                      onClick={() => setPlan(p.code)}>
+                      <b>{p.label}</b>
+                      <span>${period === "annual" ? p.annual : p.monthly}
+                        /{period === "annual" ? "yr" : "mo"}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="plan-mini" style={{ marginTop: 6 }}>
+                  {["monthly", "annual"].map((k) => (
+                    <button key={k} type="button"
+                      className={"plan-mini-item" + (period === k ? " active" : "")}
+                      onClick={() => setPeriod(k)}>{k === "annual" ? "Annual" : "Monthly"}</button>
+                  ))}
+                </div>
+                <small style={{ color: "var(--muted)" }}>
+                  You'll complete payment right after creating the account.
+                </small>
+              </div>
+            </>
           )}
           <button className="primary" disabled={busy}>
             {busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}

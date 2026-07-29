@@ -34,8 +34,8 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
 }
 
 export const api = {
-  register: (email, password, invite_code) =>
-    request("/api/auth/register", { method: "POST", auth: false, body: { email, password, invite_code } }),
+  register: (email, password, invite_code, plan, period) =>
+    request("/api/auth/register", { method: "POST", auth: false, body: { email, password, invite_code, plan, period } }),
   login: (email, password) =>
     request("/api/auth/login", { method: "POST", auth: false, body: { email, password } }),
   me: () => request("/api/auth/me"),
@@ -49,6 +49,14 @@ export const api = {
   tickers: (market) => request(`/api/tickers${market ? `?market=${encodeURIComponent(market)}` : ""}`),
   trackRecord: () => request("/api/track-record", { auth: false }),
 
+  // ---- billing ----
+  plans: () => request("/api/billing/plans", { auth: false }),
+  adsConfig: () => request("/api/billing/ads", { auth: false }),
+  mySubscription: () => request("/api/billing/me"),
+  activateSubscription: (subscription_id) =>
+    request("/api/billing/activate", { method: "POST", body: { subscription_id } }),
+  cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),
+
   // ---- admin ----
   adminStats: () => request("/api/admin/stats"),
   adminUsers: () => request("/api/admin/users"),
@@ -57,4 +65,6 @@ export const api = {
   adminUpdateUser: (id, patch) =>
     request(`/api/admin/users/${id}`, { method: "PATCH", body: patch }),
   adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
+  adminSetSubscription: (id, body) =>
+    request(`/api/admin/users/${id}/subscription`, { method: "POST", body }),
 };

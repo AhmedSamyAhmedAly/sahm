@@ -335,6 +335,45 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .pos-form input { width: 130px; }
 .pos-form button.primary { height: 38px; }
 
+/* ---------- pricing / plans ---------- */
+.plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.plan-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; cursor: pointer; transition: border-color .15s, transform .1s;
+}
+.plan-card:hover { transform: translateY(-2px); }
+.plan-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.plan-name { font-weight: 800; font-size: 15px; letter-spacing: .02em; }
+.plan-price { font-size: 30px; font-weight: 800; margin: 6px 0 2px; }
+.plan-price small { font-size: 13px; font-weight: 500; color: var(--muted); }
+.plan-save { color: var(--accent); font-size: 12px; font-weight: 700; }
+.plan-blurb { color: var(--muted); font-size: 13px; margin: 8px 0; }
+.plan-feats { list-style: none; padding: 0; margin: 8px 0; font-size: 13px; line-height: 1.7; }
+.plan-pick { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--accent); }
+
+.plan-mini { display: flex; gap: 6px; flex-wrap: wrap; }
+.plan-mini-item {
+  flex: 1; min-width: 76px; background: var(--card-2); border: 1px solid var(--border);
+  border-radius: 9px; padding: 7px 8px; cursor: pointer; color: var(--text); font-size: 12px;
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+}
+.plan-mini-item.active { border-color: var(--accent); color: var(--accent); }
+.plan-mini-item span { color: var(--muted); }
+.plan-mini-item.active span { color: var(--accent); }
+
+/* ---------- ad slots ---------- */
+.ad-slot {
+  margin: 14px 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 90px; overflow: hidden;
+  border: 1px dashed var(--border); border-radius: 12px; background: var(--card);
+}
+.ad-slot > .ad-label {
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  padding: 4px 0 2px;
+}
+.ad-slot.ad-inline { min-height: 60px; }
+.ad-slot.ad-empty { display: none; }   /* nothing to show -> take no space */
+
 /* ---------- searchable ticker picker ---------- */
 .tickerpick { position: relative; }
 .tickerpick > input { width: 100%; }

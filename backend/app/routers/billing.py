@@ -51,6 +51,19 @@ def list_plans():
     }
 
 
+@router.get("/ads")
+def ads_config():
+    """Ad-network wiring, served at runtime so switching networks is a config
+    change (Railway variable) rather than a redeploy."""
+    return {
+        "enabled": settings.ads_enabled and bool(settings.ads_slot_html),
+        "head_snippet": settings.ads_head_snippet,
+        "slot_html": settings.ads_slot_html,
+        # Paying subscribers shouldn't see ads — they already paid.
+        "hide_for_subscribers": True,
+    }
+
+
 @router.get("/me", response_model=SubscriptionOut)
 def my_subscription(user: User = Depends(get_current_user)):
     return subscription_out(user)

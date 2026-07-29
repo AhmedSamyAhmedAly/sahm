@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { api } from "../api.js";
 import TradePlan from "../components/TradePlan.jsx";
+import AdSlot from "../components/AdSlot.jsx";
 import { groupOf, groupLabel, money, prob, signed, tickerLabel } from "../format.js";
 
 const TIMEFRAMES = [
@@ -114,6 +115,8 @@ export default function StockDetail() {
           )}
         </div>
       </div>
+
+      <AdSlot slot="stock-mid" inline />
 
       {p && (
         <>

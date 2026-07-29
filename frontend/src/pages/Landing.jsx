@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Logo from "../components/Logo.jsx";
+import AdSlot from "../components/AdSlot.jsx";
 
 // Public marketing/landing page shown to logged-out visitors. The hero is the
 // honest, verifiable TRACK RECORD — the one thing that earns trust (and users).
@@ -32,6 +33,8 @@ export default function Landing() {
           <Link to="/login" className="btn-primary">Get started — free</Link>
         </div>
       </header>
+
+      <div className="container"><AdSlot slot="landing-hero" /></div>
 
       <section className="landing-stats">
         <div className="lstat">

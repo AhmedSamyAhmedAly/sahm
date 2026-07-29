@@ -1,5 +1,6 @@
 import { useState } from "react";
 import PicksView from "../components/PicksView.jsx";
+import AdSlot from "../components/AdSlot.jsx";
 
 // Two top-level views: the daily buy Suggestions (with per-stock scenario pills),
 // and a searchable All-Stocks browser of the whole market.
@@ -13,6 +14,7 @@ export default function Dashboard() {
   return (
     <>
       <div className="container wide" style={{ paddingBottom: 0 }}>
+        <AdSlot slot="dashboard-top" />
         <div className="tabs">
           {VIEWS.map((v) => (
             <button
@@ -31,6 +33,7 @@ export default function Dashboard() {
       ) : (
         <PicksView key="all" mode="all" title="📋 All stocks" />
       )}
+      <div className="container wide"><AdSlot slot="dashboard-bottom" /></div>
     </>
   );
 }

@@ -5,6 +5,7 @@ import { money, signed } from "../format.js";
 import { useMarket, currencyForTicker } from "../market.jsx";
 import { usePositions, positionStatus } from "../positions.js";
 import TickerPicker from "../components/TickerPicker.jsx";
+import AdSlot from "../components/AdSlot.jsx";
 
 function fmt(x, cur) {
   if (x == null) return "—";
@@ -134,6 +135,8 @@ export default function Positions() {
           </table>
         )}
       </div>
+
+      <AdSlot slot="positions-mid" inline />
 
       <div className="card" style={{ padding: 16 }}>
         <div className="section-title" style={{ marginTop: 0 }}>Add a position</div>

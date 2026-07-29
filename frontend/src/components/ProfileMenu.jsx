@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import ChangePassword from "./ChangePassword.jsx";
 
@@ -44,6 +45,17 @@ export default function ProfileMenu() {
               </div>
             </div>
           </div>
+          <NavLink to="/subscribe" className="dropdown-item" onClick={() => setOpen(false)}
+            style={{ textDecoration: "none", display: "block" }}>
+            {user.needsPayment ? "⚠ Subscribe" : "💳 Subscription"}
+            <small style={{ display: "block", color: "var(--muted)", fontWeight: 500 }}>
+              {user.role === "admin" || user.role === "staff"
+                ? "Full access (staff)"
+                : user.needsPayment
+                  ? "No active plan"
+                  : `${(user.plan || "").toUpperCase()} · until ${String(user.planUntil || "").slice(0, 10)}`}
+            </small>
+          </NavLink>
           <button className="dropdown-item" onClick={() => { setOpen(false); setPwOpen(true); }}>
             🔑 Change password
           </button>

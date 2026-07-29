@@ -7,7 +7,16 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fromResp = (r) => ({ email: r.email, role: r.role });
+  // Identity + entitlement travel together, so the UI can gate markets without
+  // an extra round-trip on every page.
+  const fromResp = (r) => ({
+    email: r.email,
+    role: r.role,
+    plan: r.plan ?? null,
+    planUntil: r.plan_until ?? null,
+    markets: r.markets ?? [],
+    needsPayment: !!r.needs_payment,
+  });
 
   useEffect(() => {
     if (!getToken()) {
@@ -30,11 +39,18 @@ export function AuthProvider({ children }) {
     return r;
   };
 
+  // Re-read entitlement after paying / an admin grant.
+  const refresh = () =>
+    api.me().then((r) => { setToken(r.access_token); setUser(fromResp(r)); return r; })
+      .catch(() => null);
+
   const value = {
     user,
     loading,
+    refresh,
     login: (email, password) => api.login(email, password).then(finish),
-    register: (email, password, code) => api.register(email, password, code).then(finish),
+    register: (email, password, code, plan, period) =>
+      api.register(email, password, code, plan, period).then(finish),
     logout: () => {
       setToken(null);
       setUser(null);
