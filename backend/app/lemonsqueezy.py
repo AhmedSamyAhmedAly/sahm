@@ -65,6 +65,22 @@ def cancel_subscription(sub_id: str) -> None:
         raise LemonError(f"cancel -> {r.status_code}: {r.text[:200]}")
 
 
+def store_subdomain() -> str:
+    """Just the subdomain, however LEMON_STORE was written.
+
+    People naturally paste the whole thing ("saeed.lemonsqueezy.com", or with
+    https://), which would otherwise build a double-domain checkout URL.
+    """
+    s = (settings.lemon_store or "").strip()
+    for prefix in ("https://", "http://"):
+        if s.startswith(prefix):
+            s = s[len(prefix):]
+    s = s.rstrip("/")
+    if s.endswith(".lemonsqueezy.com"):
+        s = s[: -len(".lemonsqueezy.com")]
+    return s.split("/")[0].split(".")[0] if s else ""
+
+
 def checkout_url(variant_id: str, *, email: str, user_id: int,
                  redirect_to: str | None = None) -> str:
     """A hosted-checkout link for one variant.
@@ -72,7 +88,8 @@ def checkout_url(variant_id: str, *, email: str, user_id: int,
     `custom[user_id]` comes back on every webhook, which is how a payment is tied to
     an account — email alone is unreliable (people pay with a different address).
     """
-    if not settings.lemon_store:
+    store = store_subdomain()
+    if not store:
         raise LemonError("LEMON_STORE is not set")
     if not variant_id:
         raise LemonError("No Lemon Squeezy variant configured for that plan")
@@ -84,7 +101,7 @@ def checkout_url(variant_id: str, *, email: str, user_id: int,
     if redirect_to:
         params["checkout[success_url]"] = redirect_to
     q = urllib.parse.urlencode(params)
-    return f"https://{settings.lemon_store}.lemonsqueezy.com/buy/{variant_id}?{q}"
+    return f"https://{store}.lemonsqueezy.com/buy/{variant_id}?{q}"
 
 
 def verify_webhook(signature: str | None, body: bytes) -> bool:
