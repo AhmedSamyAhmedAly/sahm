@@ -58,7 +58,10 @@ def feats_to_vector(feats: dict, keys: list[str] | None = None) -> list[float]:
         elif v is None:
             out.append(np.nan)
         else:
-            out.append(float(v))
+            v = float(v)
+            # US penny stocks can produce inf/huge ratios (e.g. volume / ~0 average).
+            # Treat them as missing — the models impute/handle NaN natively.
+            out.append(v if np.isfinite(v) and abs(v) < 1e12 else np.nan)
     return out
 
 
@@ -157,6 +160,7 @@ def train_band(db: Session, matrix: pd.DataFrame, target_pct: float, horizon: in
     sub = matrix.dropna(subset=[col, "close"]).copy()
     sub["y"] = (sub[col].to_numpy() >= sub["close"].to_numpy() * (1 + target_pct)).astype(int)
     X = sub[ML_FEATURES].to_numpy(dtype=np.float32)   # float32: half the memory, HGB-friendly
+    X[np.isinf(X)] = np.nan   # inf from junk data (or float32 overflow) -> missing
     y = sub["y"].to_numpy()
     key = band_key(target_pct, horizon)
 
