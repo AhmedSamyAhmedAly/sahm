@@ -65,6 +65,28 @@ def _has_table(conn, table: str) -> bool:
     return row is not None
 
 
+# Columns added to EXISTING tables after the first release. create_all() only ever
+# creates missing tables — it never alters one — so every added column must be
+# listed here or a deploy will 500 on the first query that mentions it.
+_ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    # (table, column, SQL type)
+    ("users", "plan", "VARCHAR(16)"),
+    ("users", "plan_until", "TIMESTAMP"),
+    ("users", "plan_source", "VARCHAR(16)"),
+    ("users", "paypal_subscription_id", "VARCHAR(64)"),
+]
+
+
+def _ensure_added_columns() -> None:
+    """Idempotently add post-release columns to existing tables."""
+    with engine.begin() as conn:
+        for table, col, coltype in _ADDED_COLUMNS:
+            if not _has_table(conn, table) or _has_column(conn, table, col):
+                continue
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}"))
+            log.info("schema: added %s.%s", table, col)
+
+
 def _ensure_market_columns() -> None:
     """Add the per-market `exchange` column to the model/stat/run tables on an
     existing database (idempotent). New DBs already get it from create_all; this
@@ -109,10 +131,12 @@ def init_db() -> None:
     from app import models  # noqa: F401  (register models on Base.metadata)
 
     Base.metadata.create_all(bind=engine)
-    try:
-        _ensure_market_columns()
-    except Exception as e:  # noqa: BLE001 — never block startup on a best-effort migration
-        log.warning("schema: market-column migration skipped: %s", e)
+    for step, fn in (("added-column", _ensure_added_columns),
+                     ("market-column", _ensure_market_columns)):
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001 — never block startup on a best-effort migration
+            log.warning("schema: %s migration skipped: %s", step, e)
     Base.metadata.create_all(bind=engine)  # recreate anything the migration dropped
 
 
