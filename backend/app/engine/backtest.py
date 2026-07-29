@@ -122,25 +122,57 @@ def _load_bars(db: Session, ticker: str) -> pd.DataFrame:
     return df
 
 
+def _merge_counts(totals: dict, samples: list[dict]) -> int:
+    """Fold one ticker's samples into running totals — keeps peak memory flat even
+    for a huge universe (US: tens of millions of samples would not fit in RAM)."""
+    for s in samples:
+        key = (s["score_band"], s["target_pct"], s["horizon_days"])
+        t = totals.setdefault(key, {"n": 0, "hits": 0, "ret_sum": 0.0, "days_sum": 0.0, "days_n": 0})
+        t["n"] += 1
+        if s["hit"]:
+            t["hits"] += 1
+            if s["days_to_target"] is not None:
+                t["days_sum"] += s["days_to_target"]
+                t["days_n"] += 1
+        t["ret_sum"] += s["fwd_return"]
+    return len(samples)
+
+
 def run_backtest(
     db: Session,
     target_bands: list[tuple[float, int]] | None = None,
     start: dt.date | None = None,
     end: dt.date | None = None,
 ) -> dict:
-    """Backtest this market's active universe and persist BacktestStat rows."""
+    """Backtest this market's active universe and persist BacktestStat rows.
+
+    Aggregates INCREMENTALLY (running counters per band) instead of accumulating
+    every sample — identical statistics, flat memory, so it scales to the US universe.
+    """
     ex = settings.exchange
     target_bands = target_bands or settings.target_bands
     tickers = db.execute(
         select(Asset.ticker).where(Asset.is_active.is_(True), Asset.exchange == ex)
     ).scalars().all()
 
-    all_samples: list[dict] = []
+    totals: dict[tuple, dict] = {}
+    n_samples = 0
     for t in tickers:
         df = _load_bars(db, t)
-        all_samples.extend(backtest_ticker(df, target_bands, start, end))
+        n_samples += _merge_counts(totals, backtest_ticker(df, target_bands, start, end))
 
-    stats = aggregate(all_samples)
+    stats = {
+        key: {
+            "score_band": key[0],
+            "target_pct": float(key[1]),
+            "horizon_days": int(key[2]),
+            "n_samples": t["n"],
+            "hit_rate": t["hits"] / t["n"] if t["n"] else 0.0,
+            "avg_return": t["ret_sum"] / t["n"] if t["n"] else None,
+            "avg_days_to_target": (t["days_sum"] / t["days_n"]) if t["days_n"] else None,
+        }
+        for key, t in totals.items()
+    }
 
     # Replace only THIS market's stored stats (never touch the other exchange's rows).
     db.query(BacktestStat).filter(BacktestStat.exchange == ex).delete()
@@ -158,7 +190,7 @@ def run_backtest(
             )
         )
     db.commit()
-    return {"market": ex, "tickers": len(tickers), "samples": len(all_samples), "bands": len(stats)}
+    return {"market": ex, "tickers": len(tickers), "samples": n_samples, "bands": len(stats)}
 
 
 def load_stats_map(db: Session) -> dict[tuple, BacktestStat]:
