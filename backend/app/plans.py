@@ -57,6 +57,13 @@ def price_of(plan: str, period: str) -> float | None:
     return p.get(period) if p and period in PERIODS else None
 
 
+def lemon_variant_id(plan: str, period: str) -> str | None:
+    """Lemon Squeezy variant id for a (plan, period), from env:
+    LEMON_VARIANT_EGX_MONTHLY, LEMON_VARIANT_BOTH_ANNUAL, ..."""
+    key = f"lemon_variant_{plan}_{period}".lower()
+    return getattr(settings, key, "") or None
+
+
 def paypal_plan_id(plan: str, period: str) -> str | None:
     """PayPal billing-plan id for a (plan, period), from env:
     PAYPAL_PLAN_EGX_MONTHLY, PAYPAL_PLAN_BOTH_ANNUAL, ..."""
@@ -114,5 +121,11 @@ def public_plans() -> list[dict]:
             "annual_saving": round(p["monthly"] * 12 - p["annual"], 2),
             "paypal_plan_monthly": paypal_plan_id(p["code"], "monthly"),
             "paypal_plan_annual": paypal_plan_id(p["code"], "annual"),
+            # Whether this plan is actually purchasable with the active provider.
+            "buyable": bool(
+                lemon_variant_id(p["code"], "monthly") or lemon_variant_id(p["code"], "annual")
+            ) if settings.billing_provider == "lemonsqueezy" else bool(
+                paypal_plan_id(p["code"], "monthly")
+            ),
         })
     return out

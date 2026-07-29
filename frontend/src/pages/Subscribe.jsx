@@ -51,7 +51,42 @@ export default function Subscribe() {
   const [done, setDone] = useState(false);
 
   useEffect(() => { api.plans().then(setCat).catch((e) => setErr(e.message)); }, []);
+
+  // Returning from a hosted checkout: the webhook may take a few seconds, so poll
+  // briefly rather than telling the user it failed.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).get("paid")) return;
+    let tries = 0;
+    setBusy(true);
+    const t = setInterval(async () => {
+      tries += 1;
+      const me = await api.me().catch(() => null);
+      if (me && !me.needs_payment) {
+        setToken(me.access_token);
+        await refresh?.();
+        clearInterval(t); setBusy(false); setDone(true);
+        setTimeout(() => { window.location.href = "/"; }, 1200);
+      } else if (tries >= 12) {
+        clearInterval(t); setBusy(false);
+        setErr("Payment received but access hasn't activated yet. Give it a minute and reload — if it persists, contact support.");
+      }
+    }, 2500);
+    return () => clearInterval(t);
+  }, []);
   const sdkReady = usePayPalSdk(cat?.paypal_client_id);
+
+  // Lemon Squeezy (Merchant of Record): the server builds a signed checkout link
+  // with our user id attached, and the webhook grants access after payment.
+  const startCheckout = async () => {
+    setBusy(true); setErr("");
+    try {
+      const r = await api.checkout(chosen, period, `${window.location.origin}/subscribe?paid=1`);
+      window.location.href = r.url;
+    } catch (e) {
+      setErr(e.message || "Could not start checkout.");
+      setBusy(false);
+    }
+  };
 
   const approve = async (subscriptionId) => {
     setBusy(true); setErr("");
@@ -80,6 +115,10 @@ export default function Subscribe() {
   }
 
   const plans = cat?.plans || [];
+  const priceOf = (code) => {
+    const p = plans.find((x) => x.code === code);
+    return p ? (period === "annual" ? p.annual : p.monthly) : "";
+  };
   const expired = user?.plan && user?.needs_payment;
 
   return (
@@ -133,22 +172,34 @@ export default function Subscribe() {
       <div className="card" style={{ padding: 16, marginTop: 14 }}>
         {!cat ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>Loading plans…</p>
-        ) : !cat.paypal_configured ? (
+        ) : !cat.payments_ready ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>
             💳 Payments aren’t switched on yet. Ask the admin to enable your account.
           </p>
         ) : busy ? (
-          <p style={{ margin: 0 }}>Confirming your payment…</p>
+          <p style={{ margin: 0 }}>Working… please don’t close this page.</p>
+        ) : cat.provider === "lemonsqueezy" ? (
+          <>
+            <div className="section-title" style={{ marginTop: 0 }}>
+              {plans.find((p) => p.code === chosen)?.label} · ${priceOf(chosen)}
+              /{period === "annual" ? "yr" : "mo"}
+            </div>
+            <button type="button" className="primary" onClick={startCheckout}>
+              Continue to secure checkout →
+            </button>
+            <p className="disclaimer" style={{ marginTop: 10 }}>
+              Card, PayPal, Apple&nbsp;Pay and Google&nbsp;Pay accepted. Payment is handled by
+              Lemon Squeezy — we never see your card details. Renews automatically; cancel any
+              time from your account menu.
+            </p>
+          </>
         ) : !sdkReady ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>Loading PayPal…</p>
         ) : (
           <>
             <div className="section-title" style={{ marginTop: 0 }}>
               Pay with PayPal — {plans.find((p) => p.code === chosen)?.label} ·{" "}
-              ${period === "annual"
-                ? plans.find((p) => p.code === chosen)?.annual
-                : plans.find((p) => p.code === chosen)?.monthly}
-              /{period === "annual" ? "yr" : "mo"}
+              ${priceOf(chosen)}/{period === "annual" ? "yr" : "mo"}
             </div>
             <PayPalButton
               planId={plans.find((p) => p.code === chosen)?.[
@@ -158,8 +209,7 @@ export default function Subscribe() {
               onError={setErr}
             />
             <p className="disclaimer" style={{ marginTop: 10 }}>
-              Billing is handled by PayPal — we never see your card details. Renews
-              automatically; cancel any time from your account menu.
+              Billing is handled by PayPal — we never see your card details.
             </p>
           </>
         )}

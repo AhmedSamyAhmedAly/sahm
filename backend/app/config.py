@@ -160,6 +160,29 @@ class Settings(BaseSettings):
     # 0 disables the trial entirely.
     trial_days: int = 0
 
+    # --- billing ---
+    # Which provider takes the money. "lemonsqueezy" is a Merchant of Record: it is
+    # the legal seller, handles worldwide VAT, and pays out to a bank — which is what
+    # makes it work where PayPal cannot receive funds (e.g. Egypt).
+    billing_provider: str = "lemonsqueezy"      # lemonsqueezy | paypal | none
+
+    # --- Lemon Squeezy ---
+    lemon_api_key: str = ""
+    lemon_store: str = ""             # your store subdomain, e.g. "saeed" in saeed.lemonsqueezy.com
+    lemon_webhook_secret: str = ""    # the signing secret you set on the webhook
+    # Variant ids from the dashboard (Products -> a product -> variant). One per
+    # (plan, period) — see scripts/lemon_list_variants.py and docs/MONETIZATION.md.
+    lemon_variant_egx_monthly: str = ""
+    lemon_variant_egx_annual: str = ""
+    lemon_variant_us_monthly: str = ""
+    lemon_variant_us_annual: str = ""
+    lemon_variant_both_monthly: str = ""
+    lemon_variant_both_annual: str = ""
+
+    @property
+    def lemon_configured(self) -> bool:
+        return bool(self.lemon_api_key and self.lemon_store)
+
     # --- billing (PayPal Subscriptions) ---
     # "sandbox" while testing, "live" for real money.
     paypal_env: str = "sandbox"

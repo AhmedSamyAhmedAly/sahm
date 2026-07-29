@@ -8,12 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import lemonsqueezy as lemon
 from app import paypal, plans
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import SubscriptionEvent, User
-from app.schemas import ActivateSubscriptionRequest, SubscriptionOut
+from app.schemas import (
+    ActivateSubscriptionRequest, CheckoutRequest, SubscriptionOut,
+)
 
 log = logging.getLogger("saeed.billing")
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -46,7 +49,14 @@ def list_plans():
     return {
         "plans": plans.public_plans(),
         "paypal_client_id": settings.paypal_client_id,   # public by design
+        "provider": settings.billing_provider,
         "paypal_configured": settings.paypal_configured,
+        "lemon_configured": settings.lemon_configured,
+        # True when the active provider can actually take money right now.
+        "payments_ready": (
+            settings.lemon_configured if settings.billing_provider == "lemonsqueezy"
+            else settings.paypal_configured
+        ),
         "currency": "USD",
         # Lets the register form drop the invite field when signup is public.
         "open_registration": settings.open_registration,
@@ -113,9 +123,129 @@ def activate(req: ActivateSubscriptionRequest,
     return subscription_out(user)
 
 
+@router.post("/checkout")
+def checkout(req: CheckoutRequest, user: User = Depends(get_current_user)):
+    """Hand back a Lemon Squeezy hosted-checkout URL for the chosen plan.
+
+    The user id is embedded as custom data so the webhook can tie the payment to
+    this account even if they pay with a different email address.
+    """
+    if settings.billing_provider != "lemonsqueezy":
+        raise HTTPException(status_code=400, detail="Lemon Squeezy is not the active provider")
+    plan = (req.plan or "").strip().lower()
+    period = (req.period or "monthly").strip().lower()
+    if plan not in plans.PLANS or period not in plans.PERIODS:
+        raise HTTPException(status_code=400, detail="Unknown plan or period")
+    variant = plans.lemon_variant_id(plan, period)
+    if not variant:
+        raise HTTPException(status_code=503,
+                            detail="That plan isn't purchasable yet — contact the admin")
+    try:
+        url = lemon.checkout_url(variant, email=user.email, user_id=user.id,
+                                 redirect_to=req.redirect_to or None)
+    except lemon.LemonError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"url": url, "plan": plan, "period": period}
+
+
+@router.post("/webhook/lemonsqueezy")
+async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
+    """Lemon Squeezy subscription events.
+
+    Every event is HMAC-verified against the signing secret; unverified requests are
+    rejected outright, because this endpoint is public and grants paid access.
+    """
+    body = await request.body()
+    if not lemon.verify_webhook(request.headers.get("x-signature"), body):
+        log.warning("rejected unverified Lemon Squeezy webhook")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    event = await request.json()
+    meta = event.get("meta") or {}
+    etype = (meta.get("event_name") or "").lower()
+    data = (event.get("data") or {})
+    attrs = data.get("attributes") or {}
+    sub_id = str(data.get("id") or "")
+
+    # Prefer the id we planted at checkout; fall back to matching the email.
+    custom = (meta.get("custom_data") or {})
+    user = None
+    if custom.get("user_id"):
+        try:
+            user = db.get(User, int(custom["user_id"]))
+        except (TypeError, ValueError):
+            user = None
+    if user is None and attrs.get("user_email"):
+        user = db.execute(
+            select(User).where(User.email == str(attrs["user_email"]).lower())
+        ).scalar_one_or_none()
+    if user is None:
+        log.warning("lemon webhook %s: no matching user", etype)
+        return {"ok": True, "ignored": "unknown user"}
+
+    mapped = lemon.plan_period_for(attrs.get("variant_id") or "")
+    plan, period = mapped if mapped else (user.plan, "monthly")
+
+    if etype in ("subscription_created", "subscription_resumed", "subscription_unpaused",
+                 "subscription_payment_success", "subscription_updated"):
+        status = (attrs.get("status") or "").lower()
+        if status in ("cancelled", "expired", "unpaid"):
+            user.plan_source = "cancelled"
+            _record(db, user, "cancel", plan=user.plan, source="lemonsqueezy",
+                    reference=sub_id, note=f"{etype}/{status}")
+        else:
+            # Trust Lemon Squeezy's own renewal date when it gives one.
+            renews = attrs.get("renews_at")
+            until = _parse_dt(renews) if renews else None
+            user.plan = plan or user.plan
+            user.plan_until = until or plans.extend(user.plan_until, period)
+            user.plan_source = "lemonsqueezy"
+            user.paypal_subscription_id = sub_id   # provider-agnostic subscription ref
+            _record(db, user, "renew" if etype == "subscription_payment_success" else "activate",
+                    plan=user.plan, period=period, amount=plans.price_of(user.plan or "", period),
+                    source="lemonsqueezy", reference=sub_id, note=etype)
+    elif etype in ("subscription_cancelled", "subscription_expired", "subscription_paused"):
+        # Keep access to the end of the paid term; just stop renewing.
+        user.plan_source = "cancelled"
+        if etype == "subscription_expired":
+            user.plan_until = _utcnow()
+        _record(db, user, "cancel", plan=user.plan, source="lemonsqueezy",
+                reference=sub_id, note=etype)
+    elif etype == "subscription_payment_failed":
+        _record(db, user, "payment_failed", plan=user.plan, source="lemonsqueezy",
+                reference=sub_id, note=etype)
+    else:
+        return {"ok": True, "ignored": etype}
+
+    db.commit()
+    return {"ok": True, "handled": etype}
+
+
+def _parse_dt(value: str):
+    """Lemon Squeezy sends ISO-8601 UTC (often with a trailing Z)."""
+    try:
+        return dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 @router.post("/cancel", response_model=SubscriptionOut)
 def cancel(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Stop future billing. Access remains until the paid term ends."""
+    if settings.billing_provider == "lemonsqueezy":
+        if user.paypal_subscription_id:
+            try:
+                lemon.cancel_subscription(user.paypal_subscription_id)
+            except lemon.LemonError as e:
+                log.warning("lemon cancel failed: %s", e)
+                raise HTTPException(status_code=502, detail="Could not cancel — try again")
+        user.plan_source = "cancelled"
+        _record(db, user, "cancel", plan=user.plan, source="lemonsqueezy",
+                reference=user.paypal_subscription_id, note="access retained until plan_until")
+        db.commit()
+        db.refresh(user)
+        return subscription_out(user)
+
     if user.paypal_subscription_id:
         try:
             paypal.cancel_subscription(user.paypal_subscription_id)

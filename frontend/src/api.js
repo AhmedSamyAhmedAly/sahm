@@ -53,6 +53,8 @@ export const api = {
   plans: () => request("/api/billing/plans", { auth: false }),
   adsConfig: () => request("/api/billing/ads", { auth: false }),
   mySubscription: () => request("/api/billing/me"),
+  checkout: (plan, period, redirect_to) =>
+    request("/api/billing/checkout", { method: "POST", body: { plan, period, redirect_to } }),
   activateSubscription: (subscription_id) =>
     request("/api/billing/activate", { method: "POST", body: { subscription_id } }),
   cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),

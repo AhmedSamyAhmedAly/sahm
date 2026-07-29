@@ -32,6 +32,14 @@ class ActivateSubscriptionRequest(BaseModel):
     subscription_id: str
 
 
+class CheckoutRequest(BaseModel):
+    """Ask for a hosted-checkout link. Price/markets come from the server's plan
+    catalogue — the client only names which plan it wants."""
+    plan: str
+    period: str = "monthly"
+    redirect_to: str | None = None
+
+
 class SubscriptionOut(BaseModel):
     plan: str | None = None
     plan_until: dt.datetime | None = None
