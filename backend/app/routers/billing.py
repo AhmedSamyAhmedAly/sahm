@@ -5,7 +5,7 @@ import datetime as dt
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import lemonsqueezy as lemon
@@ -44,7 +44,7 @@ def subscription_out(user: User) -> SubscriptionOut:
 
 
 @router.get("/plans")
-def list_plans():
+def list_plans(db: Session = Depends(get_db)):
     """Public pricing + the PayPal plan ids the checkout button needs."""
     return {
         "plans": plans.public_plans(),
@@ -60,7 +60,41 @@ def list_plans():
         "currency": "USD",
         # Lets the register form drop the invite field when signup is public.
         "open_registration": settings.open_registration,
+        # Live proof of what each plan actually gets you today.
+        "market_stats": _market_stats(db),
     }
+
+
+def _market_stats(db: Session) -> dict:
+    """Today's signal counts per market — so the pricing page shows what a plan
+    actually delivers instead of a vague promise."""
+    from app.models import Asset, Recommendation
+    out: dict = {}
+    for code in ("EGX", "US"):
+        ex_tickers = select(Asset.ticker).where(Asset.exchange == code)
+        latest = db.execute(
+            select(func.max(Recommendation.date))
+            .where(Recommendation.ticker.in_(ex_tickers))
+        ).scalar()
+        buys = 0
+        if latest:
+            buys = db.execute(
+                select(func.count(Recommendation.id)).where(
+                    Recommendation.ticker.in_(ex_tickers),
+                    Recommendation.date == latest,
+                    Recommendation.signal.in_(
+                        ("buy", "strong_buy", "super_strong_buy")),
+                )
+            ).scalar() or 0
+        out[code] = {
+            "scan_date": str(latest) if latest else None,
+            "buy_signals": buys,
+            "tracked": db.execute(
+                select(func.count(Asset.id))
+                .where(Asset.exchange == code, Asset.is_active.is_(True))
+            ).scalar() or 0,
+        }
+    return out
 
 
 @router.get("/ads")

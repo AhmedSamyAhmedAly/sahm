@@ -180,3 +180,91 @@ def stats(db: Session = Depends(get_db), _: User = Depends(require_admin)):
         logins_last_7d=logins_7d, recommendations=recs, last_scan_date=last_scan,
         universe_size=universe, active_assets=active_assets,
     )
+
+
+@router.get("/payments")
+def payments(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Revenue + subscription activity.
+
+    Two different numbers, deliberately labelled apart:
+      * `collected` — money we have a RECORD of (event amounts). Authoritative-ish,
+        but only counts events we captured, so treat the provider dashboard as truth.
+      * `mrr_estimate` — active plans priced at their monthly rate. An estimate:
+        annual subscribers really pay 1/12 of their annual price per month, which is
+        why it's called an estimate and not revenue.
+    """
+    now = dt.datetime.now(dt.timezone.utc)
+    users = db.execute(select(User)).scalars().all()
+
+    active, by_plan, expiring = [], {}, []
+    for u in users:
+        if u.role in plans.FREE_ROLES:
+            continue
+        if plans.subscription_active(u):
+            active.append(u)
+            by_plan[u.plan] = by_plan.get(u.plan, 0) + 1
+            until = plans._aware(u.plan_until)
+            if until and (until - now).days <= 7:
+                expiring.append({
+                    "email": u.email, "plan": u.plan,
+                    "plan_until": u.plan_until,
+                    "days_left": max(0, (until - now).days),
+                    "source": u.plan_source,
+                })
+
+    # Period per user, from their latest paid event — lets MRR treat annual properly.
+    latest_period: dict[int, str] = {}
+    for ev in db.execute(
+        select(SubscriptionEvent)
+        .where(SubscriptionEvent.action.in_(("activate", "renew")))
+        .order_by(SubscriptionEvent.created_at)
+    ).scalars().all():
+        if ev.period:
+            latest_period[ev.user_id] = ev.period
+
+    mrr = 0.0
+    for u in active:
+        period = latest_period.get(u.id, "monthly")
+        if period == "annual":
+            annual = plans.price_of(u.plan or "", "annual") or 0.0
+            mrr += annual / 12.0
+        else:
+            mrr += plans.price_of(u.plan or "", "monthly") or 0.0
+
+    events = db.execute(
+        select(SubscriptionEvent).order_by(SubscriptionEvent.created_at.desc()).limit(100)
+    ).scalars().all()
+    emails = {u.id: u.email for u in users}
+    collected = sum((e.amount or 0.0) for e in events if e.action in ("activate", "renew"))
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    collected_month = sum(
+        (e.amount or 0.0) for e in events
+        if e.action in ("activate", "renew")
+        and plans._aware(e.created_at) and plans._aware(e.created_at) >= month_start
+    )
+
+    return {
+        "currency": "USD",
+        "provider": settings.billing_provider,
+        "active_subscribers": len(active),
+        "by_plan": by_plan,
+        "mrr_estimate": round(mrr, 2),
+        "collected": round(collected, 2),
+        "collected_this_month": round(collected_month, 2),
+        "paying_users": len(active),
+        "free_role_users": sum(1 for u in users if u.role in plans.FREE_ROLES),
+        "unpaid_users": sum(
+            1 for u in users
+            if u.role not in plans.FREE_ROLES and not plans.subscription_active(u)
+        ),
+        "expiring_soon": sorted(expiring, key=lambda x: x["days_left"]),
+        "events": [
+            {
+                "created_at": e.created_at, "email": emails.get(e.user_id, "?"),
+                "action": e.action, "plan": e.plan, "period": e.period,
+                "amount": e.amount, "source": e.source, "reference": e.reference,
+                "until": e.until, "note": e.note,
+            }
+            for e in events
+        ],
+    }

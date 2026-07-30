@@ -361,6 +361,21 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .plan-mini-item span { color: var(--muted); }
 .plan-mini-item.active span { color: var(--accent); }
 
+/* ---------- subscribe: account status + live plan stats ---------- */
+.sub-status {
+  display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start;
+}
+.plan-label-sm {
+  display: block; color: var(--muted); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; margin-bottom: 2px;
+}
+.plan-live {
+  background: var(--card-2); border-radius: 8px; padding: 8px 10px; margin: 8px 0;
+  font-size: 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.plan-live b { color: var(--accent); font-size: 15px; }
+.pill.best { background: rgba(61,220,151,0.16); color: var(--accent); font-weight: 700; }
+
 /* ---------- ad slots ---------- */
 .ad-slot {
   margin: 14px 0; display: flex; flex-direction: column; align-items: center;

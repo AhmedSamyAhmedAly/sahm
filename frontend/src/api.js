@@ -67,6 +67,7 @@ export const api = {
   adminUpdateUser: (id, patch) =>
     request(`/api/admin/users/${id}`, { method: "PATCH", body: patch }),
   adminDeleteUser: (id) => request(`/api/admin/users/${id}`, { method: "DELETE" }),
+  adminPayments: () => request("/api/admin/payments"),
   adminSetSubscription: (id, body) =>
     request(`/api/admin/users/${id}/subscription`, { method: "POST", body }),
 };

@@ -10,6 +10,7 @@ import Positions from "./pages/Positions.jsx";
 import Subscribe from "./pages/Subscribe.jsx";
 import TrackRecord from "./pages/TrackRecord.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
+import AdminPayments from "./pages/AdminPayments.jsx";
 import Landing from "./pages/Landing.jsx";
 import Legal from "./pages/Legal.jsx";
 import Logo from "./components/Logo.jsx";
@@ -29,6 +30,7 @@ function AdminDropdown() {
       {open && (
         <div className="dropdown" onClick={() => setOpen(false)}>
           <NavLink to="/admin/users" className={item}>👥 Users</NavLink>
+          <NavLink to="/admin/payments" className={item}>💰 Payments</NavLink>
         </div>
       )}
     </div>
@@ -140,6 +142,7 @@ export default function App() {
         <Route path="/subscribe" element={<Protected><Subscribe /></Protected>} />
         <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
         <Route path="/admin/users" element={<Protected adminOnly><AdminUsers /></Protected>} />
+        <Route path="/admin/payments" element={<Protected adminOnly><AdminPayments /></Protected>} />
         {/* Admin-only: the raw model metrics are internal. The pill colours still
             work for everyone — they read the same endpoint directly. */}
         <Route path="/legal" element={<Legal />} />

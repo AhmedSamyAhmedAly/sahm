@@ -114,6 +114,19 @@ export default function Subscribe() {
     );
   }
 
+  const cancelSub = async () => {
+    if (!window.confirm(
+      "Stop future billing? You keep access until the end of the period you've already paid for."
+    )) return;
+    setBusy(true); setErr("");
+    try { await api.cancelSubscription(); await refresh?.(); }
+    catch (e) { setErr(e.message || "Could not cancel — try again."); }
+    finally { setBusy(false); }
+  };
+
+  const stats = cat?.market_stats || {};
+  const daysLeft = user?.planUntil
+    ? Math.ceil((new Date(user.planUntil) - Date.now()) / 86400000) : null;
   const plans = cat?.plans || [];
   const priceOf = (code) => {
     const p = plans.find((x) => x.code === code);
@@ -129,6 +142,56 @@ export default function Subscribe() {
           ? "Renew to get your daily signals back. Your positions and settings are untouched."
           : "Pick the market you trade. Cancel any time — access runs to the end of the paid period."}
       </p>
+
+      {user && (
+        <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+          <div className="sub-status">
+            <div>
+              <span className="plan-label-sm">Your account</span>
+              <div><b>{user.email}</b></div>
+            </div>
+            <div>
+              <span className="plan-label-sm">Current access</span>
+              <div>
+                {user.role === "admin" || user.role === "staff" ? (
+                  <b className="up">Full access ({user.role})</b>
+                ) : user.needsPayment ? (
+                  <b className="down">{user.plan ? "Expired" : "No plan"}</b>
+                ) : (
+                  <b className="up">{(user.plan || "").toUpperCase()}</b>
+                )}
+              </div>
+            </div>
+            <div>
+              <span className="plan-label-sm">Markets unlocked</span>
+              <div>
+                {(user.markets || []).length
+                  ? user.markets.map((m) => (
+                      <span key={m} className="pill" style={{ marginRight: 4 }}>{m}</span>
+                    ))
+                  : <span style={{ color: "var(--muted)" }}>none yet</span>}
+              </div>
+            </div>
+            {daysLeft != null && !user.needsPayment && (
+              <div>
+                <span className="plan-label-sm">Renews / ends</span>
+                <div>
+                  <b>{String(user.planUntil).slice(0, 10)}</b>
+                  <small style={{ display: "block", color: "var(--muted)" }}>
+                    {daysLeft} day{daysLeft === 1 ? "" : "s"} left
+                  </small>
+                </div>
+              </div>
+            )}
+            {!user.needsPayment && user.role === "member" && (
+              <button type="button" className="iconbtn" disabled={busy}
+                onClick={cancelSub} style={{ alignSelf: "center" }}>
+                Cancel renewal
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="tabs" style={{ marginBottom: 14 }}>
         {PERIODS.map((p) => (
@@ -149,7 +212,15 @@ export default function Subscribe() {
           return (
             <div key={p.code} className={"plan-card" + (active ? " active" : "")}
               onClick={() => setChosen(p.code)}>
-              <div className="plan-name">{p.label}</div>
+              <div className="plan-name">
+                {p.label}
+                {user?.plan === p.code && !user?.needsPayment && (
+                  <span className="pill" style={{ marginLeft: 6 }}>current</span>
+                )}
+                {p.code === "both" && user?.plan !== "both" && (
+                  <span className="pill best" style={{ marginLeft: 6 }}>best value</span>
+                )}
+              </div>
               <div className="plan-price">
                 ${price}<small>/{period === "annual" ? "yr" : "mo"}</small>
               </div>
@@ -157,6 +228,19 @@ export default function Subscribe() {
                 <div className="plan-save">Save ${p.annual_saving} vs monthly</div>
               )}
               <p className="plan-blurb">{p.blurb}</p>
+              {p.markets.some((m) => stats[m]) && (
+                <div className="plan-live">
+                  {p.markets.map((m) => stats[m] && (
+                      <div key={m}>
+                        <b>{stats[m].buy_signals}</b> buy signals in {m} today
+                        <small style={{ display: "block", color: "var(--muted)" }}>
+                          {stats[m].tracked.toLocaleString()} stocks tracked
+                          {stats[m].scan_date ? ` · scanned ${stats[m].scan_date}` : ""}
+                        </small>
+                      </div>
+                    ))}
+                </div>
+              )}
               <ul className="plan-feats">
                 <li>✓ Daily ranked buy signals</li>
                 <li>✓ Entry / target / stop + position sizing</li>
@@ -185,7 +269,9 @@ export default function Subscribe() {
               /{period === "annual" ? "yr" : "mo"}
             </div>
             <button type="button" className="primary" onClick={startCheckout}>
-              Continue to secure checkout →
+              {user?.plan && !user?.needsPayment && user.plan !== chosen
+                ? "Switch plan — continue to checkout →"
+                : "Continue to secure checkout →"}
             </button>
             <p className="disclaimer" style={{ marginTop: 10 }}>
               Card, PayPal, Apple&nbsp;Pay and Google&nbsp;Pay accepted. Payment is handled by
