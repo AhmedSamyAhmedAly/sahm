@@ -51,11 +51,14 @@ export default function AdminPayments() {
         <Kpi label="Est. MRR" value={money(d.mrr_estimate)}
           sub="annual plans counted as 1/12 per month" tone="up" />
         <Kpi label="Recorded this month" value={money(d.collected_this_month)} />
-        <Kpi label="Recorded (last 100 events)" value={money(d.collected)} />
+        <Kpi label="Recorded (last 100 events)" value={money(d.collected)}
+          sub="payment events only" />
       </div>
 
       <div className="kpis" style={{ marginTop: 10 }}>
         <Kpi label="Free access (admin/staff)" value={d.free_role_users} />
+        <Kpi label="Comped (admin-granted)" value={d.comped ?? 0}
+          sub="real access, not revenue" />
         <Kpi label="No active plan" value={d.unpaid_users}
           tone={d.unpaid_users ? "down" : ""} />
         {planRows.map(([plan, n]) => (

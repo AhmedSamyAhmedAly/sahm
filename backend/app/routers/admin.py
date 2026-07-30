@@ -196,10 +196,13 @@ def payments(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     now = dt.datetime.now(dt.timezone.utc)
     users = db.execute(select(User)).scalars().all()
 
+    # Count anyone with a live PAID plan, including admins/staff — they may well have
+    # bought one (the first real purchase here was an admin's, and skipping roles made
+    # the page read "0 active subscribers" next to a $10 payment).
     active, by_plan, expiring = [], {}, []
     for u in users:
-        if u.role in plans.FREE_ROLES:
-            continue
+        if u.plan_source == "manual":
+            continue          # comped by an admin: real access, but not revenue
         if plans.subscription_active(u):
             active.append(u)
             by_plan[u.plan] = by_plan.get(u.plan, 0) + 1
@@ -247,6 +250,8 @@ def payments(db: Session = Depends(get_db), _: User = Depends(require_admin)):
         "currency": "USD",
         "provider": settings.billing_provider,
         "active_subscribers": len(active),
+        "comped": sum(1 for u in users if u.plan_source == "manual"
+                      and plans.subscription_active(u)),
         "by_plan": by_plan,
         "mrr_estimate": round(mrr, 2),
         "collected": round(collected, 2),

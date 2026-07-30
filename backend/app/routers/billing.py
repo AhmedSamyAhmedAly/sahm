@@ -228,15 +228,19 @@ async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
             _record(db, user, "cancel", plan=user.plan, source="lemonsqueezy",
                     reference=sub_id, note=f"{etype}/{status}")
         else:
-            # Trust Lemon Squeezy's own renewal date when it gives one.
-            renews = attrs.get("renews_at")
-            until = _parse_dt(renews) if renews else None
             user.plan = plan or user.plan
-            user.plan_until = until or plans.extend(user.plan_until, period)
+            user.plan_until = _authoritative_expiry(attrs, sub_id, period, user)
             user.plan_source = "lemonsqueezy"
-            user.paypal_subscription_id = sub_id   # provider-agnostic subscription ref
-            _record(db, user, "renew" if etype == "subscription_payment_success" else "activate",
-                    plan=user.plan, period=period, amount=plans.price_of(user.plan or "", period),
+            if etype != "subscription_updated":
+                user.paypal_subscription_id = sub_id   # provider-agnostic subscription ref
+            # Only the PAYMENT event carries money. Recording an amount on
+            # created/updated too would multiply one purchase into several.
+            is_payment = etype == "subscription_payment_success"
+            _record(db, user,
+                    "renew" if is_payment else
+                    ("update" if etype == "subscription_updated" else "activate"),
+                    plan=user.plan, period=period,
+                    amount=plans.price_of(user.plan or "", period) if is_payment else None,
                     source="lemonsqueezy", reference=sub_id, note=etype)
     elif etype in ("subscription_cancelled", "subscription_expired", "subscription_paused"):
         # Keep access to the end of the paid term; just stop renewing.
@@ -253,6 +257,31 @@ async def lemon_webhook(request: Request, db: Session = Depends(get_db)):
 
     db.commit()
     return {"ok": True, "handled": etype}
+
+
+def _authoritative_expiry(attrs: dict, sub_id: str, period: str, user: User):
+    """The subscription's real next-renewal date, never a blind +1 period.
+
+    Subscription events carry `renews_at`. PAYMENT events carry an invoice object that
+    does NOT, and falling back to "extend by one period" there granted an extra month
+    for a single payment. So when it's missing we ask the API for the subscription
+    itself, and only extend as a genuine last resort.
+    """
+    renews = attrs.get("renews_at")
+    if renews:
+        parsed = _parse_dt(renews)
+        if parsed:
+            return parsed
+    ref = attrs.get("subscription_id") or sub_id
+    if ref:
+        try:
+            sub = lemon.get_subscription(str(ref))
+            parsed = _parse_dt(((sub.get("attributes") or {}).get("renews_at")) or "")
+            if parsed:
+                return parsed
+        except Exception as e:  # noqa: BLE001 — fall through to the local estimate
+            log.warning("could not read subscription %s for expiry: %s", ref, e)
+    return plans.extend(user.plan_until, period)
 
 
 def _parse_dt(value: str):
