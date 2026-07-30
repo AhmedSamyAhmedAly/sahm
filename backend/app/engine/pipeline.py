@@ -23,6 +23,45 @@ from app.engine.signals import decide_signal, news_demote, score_features
 from app.models import Asset, DailyBar, Outcome, PipelineRun, Recommendation
 
 
+def _load_bars_bulk(db: Session, exchange: str, lookback_days: int = 620
+                    ) -> dict[str, pd.DataFrame]:
+    """Every active ticker's recent bars in ONE query, grouped per ticker.
+
+    The scan used to issue a query per ticker. That's fine against a local file, but
+    against a remote database 4,000+ round-trips dominate the runtime (the US job hit
+    a 2-hour CI timeout). One windowed read is orders of magnitude faster.
+
+    The window is calendar days, sized so ~400 trading rows survive per ticker —
+    indicators need MIN_BARS (210) plus warm-up.
+    """
+    maxd = db.execute(
+        select(func.max(DailyBar.date))
+        .join(Asset, Asset.ticker == DailyBar.ticker)
+        .where(Asset.exchange == exchange)
+    ).scalar()
+    if maxd is None:
+        return {}
+    cutoff = maxd - dt.timedelta(days=lookback_days)
+    rows = db.execute(
+        select(DailyBar.ticker, DailyBar.date, DailyBar.open, DailyBar.high,
+               DailyBar.low, DailyBar.close, DailyBar.volume)
+        .join(Asset, Asset.ticker == DailyBar.ticker)
+        .where(Asset.is_active.is_(True), Asset.exchange == exchange,
+               DailyBar.date >= cutoff)
+        .order_by(DailyBar.ticker, DailyBar.date)
+    ).all()
+    if not rows:
+        return {}
+    df = pd.DataFrame(rows, columns=["ticker", "date", "open", "high", "low",
+                                     "close", "volume"])
+    for c in ("open", "high", "low", "close", "volume"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    out: dict[str, pd.DataFrame] = {}
+    for ticker, g in df.groupby("ticker", sort=False):
+        out[ticker] = g.drop(columns=["ticker"]).reset_index(drop=True)
+    return out
+
+
 def _load_bars(db: Session, ticker: str, limit: int = 400) -> pd.DataFrame:
     """Recent bars only (last `limit`). The scan's indicators need ~210 bars, so
     pulling the full 16-yr history here is pure wasted DB transfer — keep it light.
@@ -95,10 +134,13 @@ def run_scan(db: Session, scan_date: dt.date | None = None) -> dict:
         Recommendation.date == scan_date, Recommendation.ticker.in_(ex_tickers)))
     db.commit()
 
+    # One bulk read instead of a query per ticker — see _load_bars_bulk.
+    bars_by_ticker = _load_bars_bulk(db, ex)
+
     ranked = 0
     for a in assets:
-        df = _load_bars(db, a.ticker)
-        if len(df) < MIN_BARS:
+        df = bars_by_ticker.get(a.ticker)
+        if df is None or len(df) < MIN_BARS:
             continue
         df_ind = add_indicators(df)
         feats = feature_row(df_ind, len(df_ind) - 1)
@@ -233,13 +275,34 @@ def enrich_news(db: Session, scan_date: dt.date) -> int:
 
 
 def grade_due(db: Session) -> int:
-    """Grade this market's recommendations whose horizon has elapsed and aren't graded."""
-    ex_tickers = select(Asset.ticker).where(Asset.exchange == settings.exchange)
-    pending = db.execute(
+    """Grade this market's recommendations whose horizon has elapsed and aren't graded.
+
+    Only calls old enough to POSSIBLY have matured are considered: a rec needs
+    `horizon_days` of trading data after its date, so anything newer than the latest
+    bar minus the shortest horizon cannot be gradeable yet. Without that filter every
+    run re-queried thousands of young recs just to discard them — the single biggest
+    cost of the daily job against a remote database.
+    """
+    ex = settings.exchange
+    ex_tickers = select(Asset.ticker).where(Asset.exchange == ex)
+    latest_bar = db.execute(
+        select(func.max(DailyBar.date))
+        .join(Asset, Asset.ticker == DailyBar.ticker)
+        .where(Asset.exchange == ex)
+    ).scalar()
+
+    q = (
         select(Recommendation)
         .outerjoin(Outcome, Outcome.recommendation_id == Recommendation.id)
         .where(Outcome.id.is_(None), Recommendation.ticker.in_(ex_tickers))
-    ).scalars().all()
+    )
+    if latest_bar is not None:
+        shortest = min((h for _, h in settings.target_bands), default=10)
+        # ~1.5 calendar days per trading day, so this is a generous cutoff that can
+        # never skip something genuinely matured.
+        q = q.where(Recommendation.date
+                    <= latest_bar - dt.timedelta(days=int(shortest * 1.5)))
+    pending = db.execute(q).scalars().all()
 
     graded = 0
     for rec in pending:

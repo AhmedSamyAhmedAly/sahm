@@ -111,11 +111,19 @@ def ingest_prices(client: EODHDClient, db: Session, tickers: list[str],
     """
     if max_backfill_days is None:
         max_backfill_days = max(settings.min_history_days * 2, 380)
+
+    # Latest stored bar for every ticker in ONE query. Asking per ticker meant
+    # thousands of round-trips, which dominates the runtime against a remote DB.
+    want = set(tickers)
+    last_by_ticker: dict[str, dt.date] = {
+        t: d for t, d in db.execute(
+            select(DailyBar.ticker, func.max(DailyBar.date)).group_by(DailyBar.ticker)
+        ).all() if t in want
+    }
+
     inserted = 0
     for ticker in tickers:
-        last = db.execute(
-            select(func.max(DailyBar.date)).where(DailyBar.ticker == ticker)
-        ).scalar()
+        last = last_by_ticker.get(ticker)
         start = None
         if not full_history:
             start = (last - dt.timedelta(days=5) if last            # small overlap, deduped below
