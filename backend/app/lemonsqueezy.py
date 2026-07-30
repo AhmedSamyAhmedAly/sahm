@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import urllib.parse
 
 import requests
 
@@ -81,27 +80,71 @@ def store_subdomain() -> str:
     return s.split("/")[0].split(".")[0] if s else ""
 
 
+_store_id_cache: dict[str, str] = {}
+
+
+def store_id() -> str:
+    """Numeric store id, looked up once from the API.
+
+    The Checkouts API needs the numeric id, while LEMON_STORE holds the human
+    subdomain — so resolve it rather than asking the operator for a second value.
+    """
+    if _store_id_cache.get("id"):
+        return _store_id_cache["id"]
+    stores = _get("/stores").get("data", [])
+    if not stores:
+        raise LemonError("No stores on this Lemon Squeezy account")
+    want = store_subdomain().lower()
+    chosen = None
+    for s in stores:
+        slug = str(((s.get("attributes") or {}).get("slug") or "")).lower()
+        domain = str(((s.get("attributes") or {}).get("domain") or "")).lower()
+        if want and (slug == want or domain.startswith(want + ".")):
+            chosen = s
+            break
+    chosen = chosen or stores[0]
+    _store_id_cache["id"] = str(chosen.get("id"))
+    return _store_id_cache["id"]
+
+
 def checkout_url(variant_id: str, *, email: str, user_id: int,
                  redirect_to: str | None = None) -> str:
-    """A hosted-checkout link for one variant.
+    """Create a checkout via the API and return its URL.
 
-    `custom[user_id]` comes back on every webhook, which is how a payment is tied to
+    Built through POST /checkouts rather than a hand-made `/buy/<id>` link: those
+    short links take the variant's UUID, not the numeric id we configure, so
+    string-building them 404s. The API takes the numeric id and hands back a real
+    checkout URL.
+
+    `custom.user_id` comes back on every webhook, which is how a payment is tied to
     an account — email alone is unreliable (people pay with a different address).
     """
-    store = store_subdomain()
-    if not store:
-        raise LemonError("LEMON_STORE is not set")
     if not variant_id:
         raise LemonError("No Lemon Squeezy variant configured for that plan")
-    params = {
-        "checkout[email]": email,
-        "checkout[custom][user_id]": str(user_id),
-        "embed": "0",
-    }
+    checkout_data: dict = {"email": email, "custom": {"user_id": str(user_id)}}
+    product_options: dict = {}
     if redirect_to:
-        params["checkout[success_url]"] = redirect_to
-    q = urllib.parse.urlencode(params)
-    return f"https://{store}.lemonsqueezy.com/buy/{variant_id}?{q}"
+        product_options["redirect_url"] = redirect_to
+    payload = {
+        "data": {
+            "type": "checkouts",
+            "attributes": {
+                "checkout_data": checkout_data,
+                **({"product_options": product_options} if product_options else {}),
+            },
+            "relationships": {
+                "store": {"data": {"type": "stores", "id": store_id()}},
+                "variant": {"data": {"type": "variants", "id": str(variant_id)}},
+            },
+        }
+    }
+    r = requests.post(f"{API}/checkouts", headers=_headers(), json=payload, timeout=30)
+    if r.status_code >= 400:
+        raise LemonError(f"create checkout -> {r.status_code}: {r.text[:300]}")
+    url = (((r.json().get("data") or {}).get("attributes") or {}).get("url"))
+    if not url:
+        raise LemonError("Lemon Squeezy returned no checkout URL")
+    return url
 
 
 def verify_webhook(signature: str | None, body: bytes) -> bool:
