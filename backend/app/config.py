@@ -263,6 +263,10 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"    # cheap; used when OPENAI_API_TOKEN is set
     news_model: str = "claude-haiku-4-5"  # used when only ANTHROPIC_API_TOKEN is set
     news_weight: float = 0.03            # light re-rank weight within the shortlist
+    # Recency window passed to Google News as a `when:Nd` operator. Without it the
+    # feed ranks by RELEVANCE, which on EGX/English routinely returned months-old
+    # headlines in the top 8 — stale news that could demote a live signal.
+    news_max_age_days: int = 7
     # Trusted-source whitelist: when on, headlines from any publisher NOT in this
     # market's list are dropped before analysis (so sentiment is built on reputable
     # sources only). The list itself is per-market (MarketProfile.news_trusted_sources).

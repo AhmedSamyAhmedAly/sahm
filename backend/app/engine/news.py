@@ -9,13 +9,18 @@ the backtested Success %. It is not a trained model feature.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
+import logging
 import urllib.parse
 import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 
 import requests
 
 from app.config import settings
+
+log = logging.getLogger(__name__)
 
 _GN = "https://news.google.com/rss/search"
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; SahmBot/1.0)"}
@@ -46,7 +51,10 @@ def _instructions() -> str:
         "You read recent headlines about one company and judge their likely "
         "short-term (1-2 week) impact on the share price. Be sober and skeptical: ignore "
         "generic market noise, weight concrete events (earnings, deals, regulatory, "
-        "dividends, lawsuits). Return sentiment in [-1,1], a label, a ONE-sentence thesis "
+        "dividends, lawsuits). Each headline is prefixed with its publication date and "
+        "the list is NOT date-ordered: weight the last few days most, and treat anything "
+        "older than a week as background context rather than a live catalyst. "
+        "Return sentiment in [-1,1], a label, a ONE-sentence thesis "
         "in English, key catalysts (short phrases), and risk_flag=true if there is a "
         "material negative/uncertainty. If headlines are irrelevant or absent, return "
         "neutral with an empty thesis."
@@ -61,6 +69,16 @@ def _is_trusted(source: str, source_url: str) -> bool:
     return any(tok in hay for tok in settings.news_trusted_list)
 
 
+def _pub_date(raw: str) -> str:
+    """RFC-822 pubDate -> 'YYYY-MM-DD' (empty if absent/unparseable)."""
+    if not raw:
+        return ""
+    try:
+        return parsedate_to_datetime(raw).date().isoformat()
+    except Exception:
+        return ""
+
+
 def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]:
     """Google News RSS in each configured language. Returns deduped recent items,
     filtered to trusted publishers only (when news_trusted_only is on)."""
@@ -72,18 +90,24 @@ def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]
     if prof.news_query_ar:
         queries["ar"] = f'"{company}" {prof.news_query_ar}'
     region = prof.news_region or "US"
+    # Google ranks this feed by RELEVANCE, not date — without a `when:` bound the
+    # top hits are routinely months old. Keep the window explicit.
+    recency = f" when:{max(1, int(settings.news_max_age_days or 7))}d"
     seen: set[str] = set()
     items: list[dict] = []
     for lang in settings.news_lang_list:
-        q = queries.get(lang, f'"{company}"')
+        q = queries.get(lang, f'"{company}"') + recency
         gl, ceid = (region, f"{region}:{lang}")
         url = f"{_GN}?q={urllib.parse.quote(q)}&hl={lang}&gl={gl}&ceid={ceid}"
         try:
             resp = requests.get(url, headers=_UA, timeout=15)
             if resp.status_code != 200:
+                log.warning("news: Google News HTTP %s for %s [%s]",
+                            resp.status_code, ticker, lang)
                 continue
             root = ET.fromstring(resp.content)
-        except Exception:
+        except Exception as exc:
+            log.warning("news: fetch failed for %s [%s]: %s", ticker, lang, exc)
             continue
         for item in root.iterfind(".//item"):
             title = (item.findtext("title") or "").strip()
@@ -95,16 +119,22 @@ def fetch_headlines(name: str | None, ticker: str, limit: int = 8) -> list[dict]
             if not _is_trusted(source, source_url):
                 continue  # drop untrusted publishers entirely
             seen.add(title.lower())
+            raw_date = (item.findtext("pubDate") or "").strip()
             items.append({
                 "title": title,
                 "url": (item.findtext("link") or "").strip(),
-                "date": (item.findtext("pubDate") or "").strip(),
+                "date": raw_date,
+                "published": _pub_date(raw_date),   # ISO date; this is what the model sees
                 "source": source,
                 "source_url": source_url,
                 "lang": lang,
             })
             if len(items) >= limit:
                 break
+    if not items:
+        # Empty is normal for a thinly-covered small cap, but it reads identically to
+        # Google throttling us — log it so a systemic block is visible in the job.
+        log.warning("news: no trusted headlines for %s (%s)", company, ticker)
     return items[:limit]
 
 
@@ -122,8 +152,14 @@ def _keyword_assess(headlines: list[dict]) -> dict:
 
 
 def _payload(name: str | None, headlines: list[dict]) -> str:
-    bullets = "\n".join(f"- ({h['lang']}) {h['title']}" for h in headlines)
-    return f"Company: {name}\nRecent headlines:\n{bullets}"
+    """Dated bullets. The feed is relevance-ordered, so the dates carry the recency
+    signal — without them the model cannot tell yesterday's news from last quarter's."""
+    bullets = "\n".join(
+        f"- [{h.get('published') or 'undated'}] ({h['lang']}) {h['title']}"
+        for h in headlines
+    )
+    return (f"Company: {name}\nToday: {dt.date.today().isoformat()}\n"
+            f"Headlines (NOT in date order):\n{bullets}")
 
 
 def _coerce(data: dict, engine: str) -> dict:

@@ -154,7 +154,9 @@ export default function StockDetail() {
               {(d.news?.headlines || []).map((h, i) => (
                 <li key={i}>
                   <a href={h.url} target="_blank" rel="noreferrer">{h.title}</a>{" "}
-                  <small style={{ color: "var(--muted)" }}>{h.source}</small>
+                  <small style={{ color: "var(--muted)" }}>
+                    {h.source}{h.published ? ` · ${h.published}` : ""}
+                  </small>
                 </li>
               ))}
               {(!d.news?.headlines || d.news.headlines.length === 0) && (
