@@ -56,8 +56,8 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
   const [track, setTrack] = useState(null);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [minConf, setMinConf] = useState(0);
   const [sort, setSort] = useState("rank");
+  const [dir, setDir] = useState("desc");   // desc = best/strongest first
   const isAll = mode === "all";
 
   useEffect(() => {
@@ -80,7 +80,6 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
     if (!data) return [];
     let r = data.picks;
     if (!isAll) r = r.filter((p) => BUY_GROUPS.includes(groupOf(p.signal)));
-    if (!isAll && minConf > 0) r = r.filter((p) => (p.success_prob || 0) >= minConf);
     if (q) {
       const s = q.toLowerCase();
       r = r.filter((p) => p.ticker.toLowerCase().includes(s) || (p.name || "").toLowerCase().includes(s));
@@ -99,10 +98,13 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
         return (a.rank || 0) - (b.rank || 0);
       };
-      r = [...r].sort(cmp);
+      // "desc" is the natural reading of each sort (best first, strongest signal
+      // first, A-Z); flipping reverses whichever is active.
+      const sign = dir === "desc" ? 1 : -1;
+      r = [...r].sort((a, b) => sign * cmp(a, b));
     }
     return r;
-  }, [data, q, minConf, sort, isAll]);
+  }, [data, q, sort, dir, isAll]);
 
   if (err) return <div className="container"><div className="error">{err}</div></div>;
   if (!data) return <div className="loading">Loading…</div>;
@@ -154,18 +156,18 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
           <div className="spacer" style={{ flex: 1 }} />
           <input placeholder="Search ticker / name" value={q} onChange={(e) => setQ(e.target.value)} />
           {!isAll && (
-            <select value={minConf} onChange={(e) => setMinConf(Number(e.target.value))}>
-              <option value={0}>Any confidence</option>
-              <option value={0.8}>≥ 80% confident</option>
-              <option value={0.85}>≥ 85% confident</option>
-            </select>
-          )}
-          {!isAll && (
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="rank">Sort: best first (confidence)</option>
               <option value="signal">Sort: signal</option>
               <option value="name">Sort: name</option>
             </select>
+          )}
+          {!isAll && (
+            <button type="button" className="iconbtn" style={{ minWidth: 104 }}
+              onClick={() => setDir((d) => (d === "desc" ? "asc" : "desc"))}
+              title={dir === "desc" ? "Best / strongest first" : "Reversed — weakest first"}>
+              {dir === "desc" ? "↓ Best first" : "↑ Reversed"}
+            </button>
           )}
         </div>
 
