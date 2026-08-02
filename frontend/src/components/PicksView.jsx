@@ -88,9 +88,14 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
     if (isAll) {
       r = [...r].sort((a, b) => (a.name || a.ticker).localeCompare(b.name || b.ticker));
     } else {
+      // Conviction order for the 4 displayed tiers; unscored rows sink last.
+      const SIGNAL_ORDER = { strong_buy: 0, buy: 1, hold: 2, sell: 3 };
       const cmp = (a, b) => {
-        if (sort === "prob") return (b.success_prob || 0) - (a.success_prob || 0);
-        if (sort === "score") return (b.score || 0) - (a.score || 0);
+        if (sort === "signal") {
+          const d = (SIGNAL_ORDER[groupOf(a.signal)] ?? 9) - (SIGNAL_ORDER[groupOf(b.signal)] ?? 9);
+          // Same tier -> keep the confidence order within it.
+          return d !== 0 ? d : (a.rank || 0) - (b.rank || 0);
+        }
         if (sort === "name") return (a.name || a.ticker).localeCompare(b.name || b.ticker);
         return (a.rank || 0) - (b.rank || 0);
       };
@@ -157,9 +162,8 @@ export default function PicksView({ mode = "suggestions", showKpis = false, titl
           )}
           {!isAll && (
             <select value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="rank">Sort: best first</option>
-              <option value="prob">Sort: success %</option>
-              <option value="score">Sort: score</option>
+              <option value="rank">Sort: best first (confidence)</option>
+              <option value="signal">Sort: signal</option>
               <option value="name">Sort: name</option>
             </select>
           )}
