@@ -60,22 +60,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/push_serving.py
 
-      # Attach news to the picks we just published, ~6h before the 10:00 Cairo open.
-      # Must come AFTER the push: the engine ran on the local SQLite cache, so today's
-      # rows only exist in the serving DB once push_serving has run. This is also what
-      # applies news_demote, so a stock with bad overnight news is downgraded BEFORE
-      # anyone trades it rather than at the first intraday refresh.
-      # Never fail the scan over the overlay: the picks are already pushed by here,
-      # and a hard failure would skip the cache save below and cost us the history
-      # file (next run would re-bootstrap from EODHD).
-      - name: Enrich today's picks with news
-        continue-on-error: true
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
-          ANTHROPIC_API_TOKEN: ${{ secrets.ANTHROPIC_API_TOKEN }}
-        run: python -m app.cli news
-
       - name: Push models to Neon (only after a bootstrap)
         if: steps.engine.outputs.bootstrapped == 'true'
         env:
