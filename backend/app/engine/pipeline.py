@@ -6,6 +6,7 @@ record stays current.
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,8 @@ from app.engine.indicators import add_indicators, feature_row, MIN_BARS
 from app.engine.levels import trade_levels
 from app.engine.signals import decide_signal, news_demote, score_features
 from app.models import Asset, DailyBar, Outcome, PipelineRun, Recommendation
+
+log = logging.getLogger(__name__)
 
 
 def _load_bars_bulk(db: Session, exchange: str, lookback_days: int = 620
@@ -241,11 +244,13 @@ def enrich_news(db: Session, scan_date: dt.date) -> int:
     names = dict(db.execute(
         select(Asset.ticker, Asset.name).where(Asset.exchange == ex)).all())
     done = 0
+    engines: dict[str, int] = {}
     for rec in rows:
         try:
             res = news_mod.analyze(names.get(rec.ticker), rec.ticker)
         except Exception:
             continue
+        engines[res.get("engine") or "?"] = engines.get(res.get("engine") or "?", 0) + 1
         sentiment = float(res.get("sentiment") or 0.0)
         headlines = res.get("headlines") or []
         risk_flag = bool(res.get("risk_flag"))
@@ -271,6 +276,9 @@ def enrich_news(db: Session, scan_date: dt.date) -> int:
                     rec.reasons = ([reason] + reasons)[:6]
         done += 1
     db.commit()
+    # The one line that says whether the paid model actually ran: "none" = no
+    # headlines (no API call), "keyword" = the LLM was unavailable and we fell back.
+    log.warning("news engines: %s", engines or "{}")
     return done
 
 

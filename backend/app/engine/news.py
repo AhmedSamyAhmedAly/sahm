@@ -195,7 +195,8 @@ def _openai_assess(name: str | None, headlines: list[dict]) -> dict | None:
         )
         text = resp.choices[0].message.content
         return _coerce(json.loads(text), settings.openai_model) if text else None
-    except Exception:
+    except Exception as exc:
+        log.warning("news: OpenAI call failed (%s) — falling back", exc)
         return None
 
 
@@ -218,7 +219,10 @@ def _anthropic_assess(name: str | None, headlines: list[dict]) -> dict | None:
         )
         text = next((b.text for b in resp.content if b.type == "text"), None)
         return _coerce(json.loads(text), settings.news_model) if text else None
-    except Exception:
+    except Exception as exc:
+        # A bad key or a $0 balance lands here. Without this line it degrades to
+        # keyword sentiment behind a green checkmark and looks like it worked.
+        log.warning("news: Anthropic call failed (%s) — falling back", exc)
         return None
 
 
