@@ -51,7 +51,10 @@ jobs:
       # Attach news to the picks we just published, ~5h before the 09:30 ET open.
       # This is also what applies news_demote, so a stock with bad overnight news is
       # downgraded BEFORE anyone trades it rather than 75 min into the session.
+      # Never fail the scan over the overlay — a hard failure here would also skip
+      # the bar trim below and let the serving DB grow unchecked.
       - name: Enrich today's picks with news (US)
+        continue-on-error: true
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           OPENAI_API_TOKEN: ${{ secrets.OPENAI_API_TOKEN }}
