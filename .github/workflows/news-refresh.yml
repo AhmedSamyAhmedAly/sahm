@@ -2,13 +2,16 @@ name: Intraday news refresh
 
 # EGX prices are end-of-day only, so the price signals can't change during the
 # day — but NEWS can. This refreshes only the news overlay (sentiment, catalysts,
-# light re-rank) on the latest scan, a few times during/after market hours.
-# Cheap: shortlist only, tiny DB writes. Sun-Thu.
+# light re-rank) on the latest scan. Cheap: shortlist only, tiny DB writes. Sun-Thu.
+#
+# The FIRST enrichment now runs inside daily-scan.yml, right after the picks are
+# published (~04:20 Cairo), so the open is covered there. This job exists for news
+# that breaks DURING the session — one pass shortly after the 10:00 Cairo open.
+# The old midday/after-close slots were dropped: 14:23 Cairo landed minutes before
+# the 14:30 close and 17:23 was after it, so neither could change a trading decision.
 on:
   schedule:
-    - cron: "23 8 * * 0-4"    # ~late morning Cairo
-    - cron: "23 11 * * 0-4"   # ~midday Cairo
-    - cron: "23 14 * * 0-4"   # ~after close Cairo
+    - cron: "23 8 * * 0-4"    # ~11:23 Cairo — ~1.5h into the session
   workflow_dispatch: {}
 
 jobs:

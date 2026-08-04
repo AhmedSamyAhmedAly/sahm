@@ -4,11 +4,14 @@ name: US intraday news refresh
 # US scan — the same cheap job as EGX's, but MARKET=US so it uses US news sources and
 # only touches US recommendations. Reads/writes the tiny shortlist on Neon directly.
 # US market hours are 09:30-16:00 America/New_York; times below are UTC, Mon-Fri.
+#
+# The FIRST enrichment now runs inside us-daily-scan.yml, right after the picks are
+# published (~04:45 ET), so the open is covered there. This job exists for news that
+# breaks DURING the session — one pass shortly after the 09:30 ET open. The old
+# afternoon/after-close slots were dropped as too late to change a decision.
 on:
   schedule:
-    - cron: "45 14 * * 1-5"   # ~10:45 ET (late morning)
-    - cron: "45 18 * * 1-5"   # ~14:45 ET (afternoon)
-    - cron: "45 21 * * 1-5"   # ~17:45 ET (after close)
+    - cron: "45 14 * * 1-5"   # ~10:45 ET — ~75 min into the session
   workflow_dispatch: {}
 
 concurrency:
