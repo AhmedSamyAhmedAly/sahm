@@ -53,10 +53,14 @@ def list_plans(db: Session = Depends(get_db)):
         "paypal_configured": settings.paypal_configured,
         "lemon_configured": settings.lemon_configured,
         # True when the active provider can actually take money right now.
+        # provider="none" is the deliberate manual mode: no checkout is offered,
+        # people email support_email and an admin grants the plan by hand.
         "payments_ready": (
             settings.lemon_configured if settings.billing_provider == "lemonsqueezy"
-            else settings.paypal_configured
+            else settings.paypal_configured if settings.billing_provider == "paypal"
+            else False
         ),
+        "support_email": settings.support_email,
         "currency": "USD",
         # Lets the register form drop the invite field when signup is public.
         "open_registration": settings.open_registration,

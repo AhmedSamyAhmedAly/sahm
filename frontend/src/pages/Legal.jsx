@@ -2,8 +2,10 @@ import { Link } from "react-router-dom";
 
 // Terms of Service + Privacy Policy. Written to match what the app ACTUALLY does —
 // if you change data handling or billing, change this page too.
-// Placeholders in {{ }} must be filled in before charging real money.
-const CONTACT_EMAIL = "support@saeed.app";
+// The contact address must be one we actually read: this page promises a route for
+// refunds, data access and deletion requests. It previously pointed at
+// support@saeed.app — a domain owned by someone else.
+const CONTACT_EMAIL = "knagdyknagdy@gmail.com";
 const OPERATOR = "Saeed";
 const JURISDICTION = "Egypt";
 

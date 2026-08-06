@@ -134,6 +134,25 @@ export default function Subscribe() {
   };
   const expired = user?.plan && user?.needs_payment;
 
+  // Manual activation route, used while no payment provider is live. The mail is
+  // pre-filled with everything an admin needs to grant the plan in one step, so
+  // nobody has to be asked "which plan?" in a reply.
+  const supportEmail = cat?.support_email || "";
+  const requestMailto = () => {
+    const label = plans.find((p) => p.code === chosen)?.label || chosen;
+    const price = priceOf(chosen);
+    const subject = `Saeed access request — ${label} (${period})`;
+    const body = [
+      "Hi,", "", "I'd like access to Saeed.", "",
+      `Account email: ${user?.email || "(the email I registered with)"}`,
+      `Plan: ${label}`,
+      `Billing: ${period}${price ? ` — $${price}` : ""}`,
+      "", "Thanks",
+    ].join("\n");
+    return `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}`
+      + `&body=${encodeURIComponent(body)}`;
+  };
+
   return (
     <div className="container">
       <h2 style={{ marginBottom: 4 }}>{expired ? "Your subscription has ended" : "Choose your plan"}</h2>
@@ -257,9 +276,35 @@ export default function Subscribe() {
         {!cat ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>Loading plans…</p>
         ) : !cat.payments_ready ? (
-          <p style={{ color: "var(--muted)", margin: 0 }}>
-            💳 Payments aren’t switched on yet. Ask the admin to enable your account.
-          </p>
+          <>
+            <div className="section-title" style={{ marginTop: 0 }}>
+              {plans.find((p) => p.code === chosen)?.label} · ${priceOf(chosen)}
+              /{period === "annual" ? "yr" : "mo"} — activated by hand
+            </div>
+            <p style={{ marginTop: 0 }}>
+              Online checkout is temporarily off while we move payment providers.
+              Email us the plan you want and we’ll switch your account on manually,
+              usually the same day.
+            </p>
+            {supportEmail ? (
+              <>
+                <a className="primary" href={requestMailto()}
+                   style={{ display: "inline-block", textDecoration: "none" }}>
+                  Request access by email →
+                </a>
+                <p className="disclaimer" style={{ marginTop: 10 }}>
+                  Opens your mail app with the plan pre-filled. Or write to{" "}
+                  <b>{supportEmail}</b> directly. You’ll be told how to pay when we
+                  reply — nothing is charged automatically, and no card details are
+                  entered on this site.
+                </p>
+              </>
+            ) : (
+              <p style={{ color: "var(--muted)", margin: 0 }}>
+                💳 Payments aren’t switched on yet. Ask the admin to enable your account.
+              </p>
+            )}
+          </>
         ) : busy ? (
           <p style={{ margin: 0 }}>Working… please don’t close this page.</p>
         ) : cat.provider === "lemonsqueezy" ? (

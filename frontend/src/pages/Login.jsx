@@ -93,7 +93,15 @@ export default function Login() {
                   ))}
                 </div>
                 <small style={{ color: "var(--muted)" }}>
-                  You'll complete payment right after creating the account.
+                  {cat && cat.payments_ready === false ? (
+                    <>
+                      Online checkout is temporarily off. Create your account, then
+                      email <b>{cat.support_email}</b> and we’ll activate this plan
+                      for you — usually the same day.
+                    </>
+                  ) : (
+                    "You'll complete payment right after creating the account."
+                  )}
                 </small>
               </div>
             </>

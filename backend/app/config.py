@@ -165,6 +165,10 @@ class Settings(BaseSettings):
     # the legal seller, handles worldwide VAT, and pays out to a bank — which is what
     # makes it work where PayPal cannot receive funds (e.g. Egypt).
     billing_provider: str = "lemonsqueezy"      # lemonsqueezy | paypal | none
+    # Where people write when they cannot self-serve — shown on the subscribe and
+    # register screens whenever `payments_ready` is false, and on the legal page.
+    # Set BILLING_PROVIDER=none to switch the whole site to this manual flow.
+    support_email: str = "knagdyknagdy@gmail.com"
 
     # --- Lemon Squeezy ---
     lemon_api_key: str = ""
